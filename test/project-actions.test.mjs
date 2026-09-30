@@ -145,7 +145,7 @@ test("Windows action invokes a literal plugin path containing shell metacharacte
 test("MCP startup creates actions without any tool calls and keeps following project changes", { timeout: 25000 }, async context => {
   const f = await fixture(context);
   const first = await f.add("Initial");
-  const env = { ...process.env, CODEX_HOME: f.codexHome, CONTEXT_MONITOR_DATA: path.join(f.directory, "sessions"), CONTEXT_MONITOR_LAUNCHER_DATA: f.dataDirectory, CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS: "0" };
+  const env = { ...process.env, CODEX_HOME: f.codexHome, CONTEXT_MONITOR_DATA: path.join(f.directory, "sessions"), CONTEXT_MONITOR_LAUNCHER_DATA: f.dataDirectory, CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS: "0", CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY: "1" };
   const child = spawn(process.execPath, [path.resolve("runtime/mcp-server.mjs")], { env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   let output = ""; child.stdout.on("data", value => { output += value; }); child.stderr.resume();
   const until = async predicate => {
@@ -155,7 +155,7 @@ test("MCP startup creates actions without any tool calls and keeps following pro
   };
   try {
     await until(() => stat(config(first)).then(() => true, () => false));
-    const state = JSON.parse(await readFile(path.join(f.dataDirectory, "launcher-0.4.1.json"), "utf8"));
+    const state = JSON.parse(await readFile(path.join(f.dataDirectory, "launcher-0.4.2.json"), "utf8"));
     const health = () => fetch(state.url + "health").then(r => r.json());
     await until(async () => (await health()).projectIntegration.configured === 1);
     assert.equal(output, "", "auto initialization must not emit unsolicited MCP stdout");

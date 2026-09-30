@@ -14,7 +14,7 @@ async function fixture(context){
   const state=path.join(directory,"state");
   const sessions=path.join(directory,"codex","sessions","2026","09","30");
   await mkdir(state,{recursive:true});await mkdir(sessions,{recursive:true});
-  const env={...process.env,CODEX_HOME:path.join(directory,"codex"),CONTEXT_MONITOR_DATA:path.join(directory,"registry"),CONTEXT_MONITOR_LAUNCHER_DATA:state,CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS:"1"};
+  const env={...process.env,CODEX_HOME:path.join(directory,"codex"),CONTEXT_MONITOR_DATA:path.join(directory,"registry"),CONTEXT_MONITOR_LAUNCHER_DATA:state,CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS:"1",CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY:"1"};
   const run=async(...args)=>JSON.parse((await execute(process.execPath,[launcher,"--no-open",...args],{env,timeout:15000,windowsHide:true})).stdout);
   context.after(async()=>{
     await execute(process.execPath,[launcher,"--stop"],{env,timeout:5000,windowsHide:true});
@@ -36,7 +36,7 @@ async function fixture(context){
 test("concurrent clicks share one healthy service; a later click reuses it",async context=>{
   const f=await fixture(context);
   // A corrupt saved address must never redirect the launcher outside loopback.
-  await writeFile(path.join(f.state,"launcher-0.4.1.json"),JSON.stringify({version:"0.4.1",pid:123,url:"https://example.invalid/"}));
+  await writeFile(path.join(f.state,"launcher-0.4.2.json"),JSON.stringify({version:"0.4.2",pid:123,url:"https://example.invalid/"}));
   const launches=await Promise.all([f.run("--session","fixture"),f.run("--session","fixture"),f.run("--session","fixture")]);
   assert.equal(new Set(launches.map(value=>value.pid)).size,1);
   assert.equal(new Set(launches.map(value=>value.url)).size,1);
@@ -44,10 +44,31 @@ test("concurrent clicks share one healthy service; a later click reuses it",asyn
   const url=new URL(warm.url);assert.equal(url.hostname,"127.0.0.1");
   assert.equal(url.searchParams.get("session"),"fixture");assert.equal(url.searchParams.has("selection"),false);
   const health=await (await fetch(new URL("health",url))).json();
-  assert.equal(health.pid,warm.pid);assert.equal(health.version,"0.4.1");
+  assert.equal(health.pid,warm.pid);assert.equal(health.version,"0.4.2");
   assert.equal((await fetch(url)).status,200);
   assert.equal((await fetch(new URL("health",url),{headers:{Origin:"https://example.invalid"}})).status,403);
-  const saved=JSON.parse(await readFile(path.join(f.state,"launcher-0.4.1.json"),"utf8"));assert.equal(saved.pid,warm.pid);
+  const saved=JSON.parse(await readFile(path.join(f.state,"launcher-0.4.2.json"),"utf8"));assert.equal(saved.pid,warm.pid);
+});
+
+test("desktop entry selects the most recent session across projects independently of its working directory",async context=>{
+  const f=await fixture(context);
+  const first="44444444-4444-4444-8444-444444444444",second="55555555-5555-4555-8555-555555555555";
+  await f.log(first,path.join(f.directory,"first-project"),5000);
+  await f.log(second,path.join(f.directory,"second-project"),1000);
+  const selected=await f.run("--recent","--cwd",path.join(f.directory,"unrelated-launcher"));
+  assert.equal(selected.sessionId,second);
+  assert.equal(new URL(selected.url).searchParams.get("selection"),"recent-session");
+  await f.log(first,path.join(f.directory,"first-project"),0);
+  const switched=await f.run("--recent");
+  assert.equal(switched.sessionId,first);assert.equal(switched.pid,selected.pid);
+  const explicit=await f.run("--recent","--session",second);
+  assert.equal(explicit.sessionId,second);assert.equal(new URL(explicit.url).searchParams.has("selection"),false);
+});
+
+test("Windows desktop helper compiles without showing windows or registering a hotkey",{skip:process.platform!=="win32"},async()=>{
+  const {stdout}=await execute("powershell.exe",["-NoProfile","-ExecutionPolicy","Bypass","-File",path.resolve("scripts/desktop-entry.ps1"),
+    "-DataDirectory",path.join(tmpdir(),"context-entry-check"),"-NodePath",process.execPath,"-CheckOnly"],{windowsHide:true,timeout:15000});
+  assert.deepEqual(JSON.parse(stdout),{nodeFound:true,hotkey:"Ctrl+Alt+M",launcherFound:true,compiled:true});
 });
 
 test("Windows PowerShell launcher returns from a captured pipeline after cold startup",{skip:process.platform!=="win32"},async context=>{
@@ -68,7 +89,7 @@ test("project selection respects directory boundaries, recovers an old lock, and
   await f.log("11111111-1111-4111-8111-111111111111",project,5000);
   await f.log("22222222-2222-4222-8222-222222222222",path.join(project,"nested"),3000);
   await f.log("33333333-3333-4333-8333-333333333333",`${project}-sibling`,1000);
-  const lock=path.join(f.state,"launcher-0.4.1.lock");await writeFile(lock,"");
+  const lock=path.join(f.state,"launcher-0.4.2.lock");await writeFile(lock,"");
   const old=new Date(Date.now()-60000);await utimes(lock,old,old);
   const selected=await f.run("--cwd",project);
   assert.equal(selected.sessionId,"22222222-2222-4222-8222-222222222222");

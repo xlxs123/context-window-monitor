@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 export function autoStartProjectMonitor(): void {
   if (process.env.CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS === "1") return;
   execFile(process.execPath, [fileURLToPath(new URL("./open-dashboard.mjs", import.meta.url)), "--ensure"], {
-    windowsHide: true, timeout: 15_000,
+    windowsHide: true, timeout: 30_000,
   }, error => {
-    if (error) process.stderr.write("Context monitor: automatic project integration could not start. Check Node.js 22.13+ and the local project registry.\n");
+    if (error) process.stderr.write("Context monitor: automatic startup could not finish. Check Node.js 22.13+ and the tray entry.\n");
   });
 }

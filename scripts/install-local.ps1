@@ -127,9 +127,16 @@ try {
         throw "Installed version differs from the package: $($installed[0].version)"
     }
     Write-Host "SUCCESS: $selector $($installed[0].version) is installed and enabled."
-    & $nodeExecutable (Join-Path $targetRoot 'runtime\open-dashboard.mjs') --ensure
+    $startupText = & $nodeExecutable (Join-Path $targetRoot 'runtime\open-dashboard.mjs') --ensure
     if ($LASTEXITCODE -ne 0) { throw 'Plugin installed, but automatic project integration did not start.' }
-    Write-Host 'Project actions are now managed automatically. Switch projects or reopen Codex once to refresh its toolbar. No chat command is needed.'
+    $startup = ($startupText -join "`n") | ConvertFrom-Json
+    if ($env:CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY -ne '1') {
+        if (-not $startup.desktopEntry.visible) { throw 'Plugin installed, but the tray entry did not start. The dashboard service is running.' }
+        Write-Host 'Click Context Monitor in the Windows notification area (near the clock). No chat command is needed.'
+        if ($startup.desktopEntry.hotkeyRegistered) { Write-Host "Shortcut is ready: $($startup.desktopEntry.hotkey)." }
+        else { Write-Warning 'The shortcuts are already in use or unavailable. The tray button remains available.' }
+    }
+    Write-Host 'Optional project-action configurations are maintained automatically; their visibility depends on the Codex UI.'
 } catch {
     Write-Error $_ -ErrorAction Continue
     exit 1

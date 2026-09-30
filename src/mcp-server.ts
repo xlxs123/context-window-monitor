@@ -12,7 +12,7 @@ import { SessionRegistry } from "./providers/session-registry.js";
 import { startDashboard } from "./dashboard-server.js";
 import { autoStartProjectMonitor } from "./auto-start.js";
 
-const VERSION = "0.4.1";
+const VERSION = "0.4.2";
 const TEMPLATE_URI = "ui://context-window-monitor/v1.html";
 const UI_SCRIPT_PATH = fileURLToPath(
   new URL("./ui/context-details-panel.js", import.meta.url),

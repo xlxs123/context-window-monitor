@@ -957,14 +957,14 @@ ${END}
         } catch (error) {
           if (error.code === "ESRCH") alive = false;
         }
-        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.1", void 0, { numeric: true }) >= 0) {
+        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.2", void 0, { numeric: true }) >= 0) {
           this.status.enabled = false;
           this.status.source = "managed-by-running-service";
           this.stop();
           return this.status;
         }
       }
-      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.1" }));
+      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.2" }));
       const ledgerPath = path2.join(this.dataDirectory, "project-actions.json");
       const ledger = await fs2.readFile(ledgerPath, "utf8").then((text2) => JSON.parse(text2)).catch((error) => {
         if (error.code === "ENOENT") return { files: [] };

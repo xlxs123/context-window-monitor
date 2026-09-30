@@ -1,28 +1,32 @@
 # Codex 上下文监控插件
 
-`context-window-monitor` **0.4.1**，用于 Codex Desktop / CLI。黑色上下文仪表盘，自动适配 Codex 中注册的所有本地项目。它是 Codex 插件，不依赖 DeepSeek Harness。
+`context-window-monitor` **0.4.2**，用于 Codex Desktop / CLI。黑色上下文仪表盘，自动适配 Codex 中注册的所有本地项目。它是 Codex 插件，不依赖 DeepSeek Harness。
 
-[下载 v0.4.1](https://github.com/xlxs123/context-window-monitor/releases/tag/v0.4.1) · [MIT 许可证](LICENSE) · [验证记录](docs/verification.md)
+[下载 v0.4.2](https://github.com/xlxs123/context-window-monitor/releases/tag/v0.4.2) · [MIT 许可证](LICENSE) · [验证记录](docs/verification.md)
 
 ## 一键打开
 
-安装后，点击 Codex 项目顶部操作菜单里的 **上下文监控**，即可在默认浏览器打开仪表盘。无需发送聊天指令，不调用模型，不逐个项目配置。
+Windows 安装后，按 **Ctrl+Alt+M**，或左键点击**任务栏右下角、时钟附近的上下文监控托盘图标**，即可在默认浏览器打开仪表盘。图标是绿色圆环和白色柱形图，悬停显示「上下文监控」和实际注册的快捷键；被 Windows 折叠时，在通知区域的 `^` 中查找。无需聊天指令，不调用模型，不逐个项目配置。
+
+这个入口是插件自己的 Windows 托盘按钮，**不是 Codex 聊天菜单或摘要面板里的按钮**。旧版只验证了项目操作配置和启动命令，未验证按钮显示；用户截图确认当前页面未显示项目操作，因此 0.4.2 不再依赖它作为主入口。
 
 Windows 首次使用：
 
 1. 安装 Codex Desktop 和 Node.js **22.13 或更新版本**。
 2. 下载 Release 的 ZIP，完整解压，双击 **`Install.cmd`**。
-3. 安装成功后切换项目，或重新打开 Codex 一次，让顶部操作刷新。
+3. 安装器会检查托盘启动和快捷键注册。安装后直接按 **Ctrl+Alt+M**；被占用时自动尝试 **Ctrl+Alt+Shift+M**。安装器和图标悬停会显示实际组合；都被占用时仍可点击托盘图标。
 
-安装器会注册个人插件市场、安装启用插件，并立即启动自动接入。通过其他方式安装插件时，自动接入在 Codex 加载插件的 MCP 服务后启动；宿主尚未加载时需要重新打开 Codex。打开监控不要求 PATH 中存在 `codex`，不需要 Python。
+安装器会注册个人插件市场、安装启用插件，并立即启动托盘和自动接入。通过其他方式安装插件时，自动接入在 Codex 加载插件的 MCP 服务后启动；宿主尚未加载时需要重新打开 Codex。打开监控不要求 PATH 中存在 `codex`，不需要 Python。托盘不读取或控制其他应用窗口，不占用前台；退出托盘后，下次插件加载会重新启动。设置 `CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY=1` 可关闭托盘自动启动。
 
 自动接入每 3 秒读取 Codex 当前项目注册表。已有项目、新增项目和路径变化都会处理；移除项目后清理插件自己添加且未被用户编辑的入口。不扫描磁盘、不使用已删除项目的历史列表。仅支持本机可写的项目目录；ChatGPT 云端项目不属于此入口的范围。
 
-入口使用 Codex 官方支持的 [本地环境操作](https://learn.chatgpt.com/docs/environments/local-environment)。插件在项目主根目录的 `.codex/environments/*.toml` 中维护标记块；没有配置时生成 `environment.toml`。保留已有 setup、其他操作和注释，修改前备份到 `CODEX_HOME/context-window-monitor/project-action-backups`。配置损坏、外部路径链接、用户修改的标记块会保留并报告，避免覆盖。
+可选的项目操作配置使用 Codex 官方支持的 [本地环境操作](https://learn.chatgpt.com/docs/environments/local-environment)。插件在项目主根目录的 `.codex/environments/*.toml` 中维护标记块；没有配置时生成 `environment.toml`。保留已有 setup、其他操作和注释，修改前备份到 `CODEX_HOME/context-window-monitor/project-action-backups`。配置损坏、外部路径链接、用户修改的标记块会保留并报告，避免覆盖。
 
-多个聊天和重复点击共享一个隐藏的本机服务。关闭页面后不再主动刷新日志，项目列表仍会同步。`scripts/open-dashboard.ps1 -Stop` 可停止服务；下次插件加载或点击入口会再次启动。`CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS=1` 可关闭自动接入。开发时可运行 `npm run open`；`--ensure` 只启动服务和接入，不打开浏览器。
+项目操作是否显示取决于 Codex 版本、项目状态和当前界面，**生成配置不代表界面上一定出现按钮**。
 
-顶部操作不提供当前选中聊天的 ID，因此按工作目录选择**本项目最近活动的会话**，并在页面明确提示；可以通过 SESSION 切换。没有匹配时显示无数据，不跳到其他项目。程序支持 `node runtime/open-dashboard.mjs --session <session-id>` 精确打开指定会话；`--no-open` 只输出地址与启动耗时，供验证使用。
+多个聊天和重复点击共享一个隐藏的本机服务和一个托盘。关闭页面后不再主动刷新日志，项目列表仍会同步。`scripts/open-dashboard.ps1 -Stop` 可停止服务和托盘；下次插件加载会再次启动。托盘右键菜单可单独退出托盘。`CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS=1` 可关闭自动接入。开发时可运行 `npm run open`；`--ensure` 只启动服务和接入，不打开浏览器。
+
+托盘和快捷键选择**本机最近活动的会话**，自动覆盖不同项目；无法识别只切换但尚未产生活动的聊天。可选项目操作不提供当前选中聊天的 ID，因此按工作目录选择**本项目最近活动的会话**，并在页面明确提示；可以通过 SESSION 切换。没有匹配时显示无数据，不跳到其他项目。程序支持 `node runtime/open-dashboard.mjs --session <session-id>` 精确打开指定会话；`--no-open` 只输出地址与启动耗时，供验证使用。
 
 ## 已实现
 
@@ -57,7 +61,7 @@ node runtime/dashboard.mjs <session-id>
 
 插件包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/`、`skills/` 和已打包的 MCP 服务。
 
-默认插件选择器为 `context-window-monitor@personal`。双击 `Install.cmd` 可首次安装或更新到 **0.4.1**，旧版本保留备份。
+默认插件选择器为 `context-window-monitor@personal`。双击 `Install.cmd` 可首次安装或更新到 **0.4.2**，旧版本保留备份。
 
 也可在 PowerShell 执行下面一行。脚本检查环境，备份旧版，注册市场、更新缓存、验证版本并启动自动接入；兼容 Windows PowerShell 5.1：
 
@@ -71,9 +75,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\context-window-m
 
 运行副本位于 `%USERPROFILE%\plugins\context-window-monitor`。安装器按 [官方插件格式](https://developers.openai.com/plugins/build/plugins) 创建或补充个人市场条目，保留已有其他插件并备份市场文件；已有同名条目指向别处时停止并说明，不覆盖它。Node.js 最低版本用于内置的只读 SQLite 项目发现，无需额外安装数据库或 npm 依赖。
 
-配置完成后即可使用顶部操作。如果需要让模型分析数据，也保留了 **“打开上下文监控”** 指令：新聊天加载更新后的技能后，可调用 `show_context_monitor`，并在支持 `open_in_codex` 的宿主中打开返回的本地仪表盘地址。支持 MCP Apps 的宿主也能渲染同一界面。
+配置完成后即可使用托盘或快捷键。如果需要让模型分析数据，也保留了 **“打开上下文监控”** 指令：新聊天加载更新后的技能后，可调用 `show_context_monitor`，并在支持 `open_in_codex` 的宿主中打开返回的本地仪表盘地址。支持 MCP Apps 的宿主也能渲染同一界面。
 
-入口为项目顶部操作，不修改 Codex 程序文件。操作默认打开系统浏览器；聊天工具也能在支持的宿主中打开 Codex 浏览器面板。CLI 可返回文本摘要和本地地址。自动接入不依赖 hooks 的信任状态；hooks 如需启用，请通过 Codex 的 `/hooks` 审核。
+Windows 主入口为插件托盘和快捷键；项目操作为可选入口，不修改 Codex 程序文件。macOS / Linux 没有这项 Windows 托盘功能，可使用本地启动器或宿主支持的项目操作。操作默认打开系统浏览器；聊天工具也能在支持的宿主中打开 Codex 浏览器面板。CLI 可返回文本摘要和本地地址。自动接入不依赖 hooks 的信任状态；hooks 如需启用，请通过 Codex 的 `/hooks` 审核。
 
 ## 数据口径与边界
 
@@ -126,7 +130,7 @@ npm run check
 npm run preview
 ```
 
-重新打包：完成 `npm run check` 后运行 `python scripts/package.py`。产物为 `dist/context-window-monitor-0.4.1.zip` 及 SHA-256 校验文件，包含源码和编译好的运行文件。第三方许可证保留在 `docs/THIRD-PARTY-NOTICES.md`。
+重新打包：完成 `npm run check` 后运行 `python scripts/package.py`。产物为 `dist/context-window-monitor-0.4.2.zip` 及 SHA-256 校验文件，包含源码和编译好的运行文件。第三方许可证保留在 `docs/THIRD-PARTY-NOTICES.md`。
 
 预览为 `http://127.0.0.1:4174`，明确标为**演示数据**，不会读取真实会话原文。`npm run dashboard` 才读取本机真实 Codex 数据。
 

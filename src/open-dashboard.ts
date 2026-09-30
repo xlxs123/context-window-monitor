@@ -8,8 +8,9 @@ import { ContextMonitorService } from "./context-monitor-service.js";
 import { startDashboard } from "./dashboard-server.js";
 import { RolloutContextProvider } from "./providers/rollout-context-provider.js";
 import { ProjectActions } from "./project-actions.js";
+import { ensureDesktopEntry, stopDesktopEntry } from "./desktop-entry.js";
 
-const VERSION = "0.4.1";
+const VERSION = "0.4.2";
 const dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path.join(process.env.CODEX_HOME || path.join(homedir(), ".codex"), "context-window-monitor");
 const statePath = path.join(dataDirectory, `launcher-${VERSION}.json`);
 const lockPath = path.join(dataDirectory, `launcher-${VERSION}.lock`);
@@ -116,8 +117,15 @@ async function openBrowser(url: string): Promise<void> {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--serve")) { await serve(); return; }
-  if (args.includes("--ensure")) { const server = await ensureServer(); console.log(JSON.stringify({ url: server.url, pid: server.pid })); return; }
+  if (args.includes("--ensure")) {
+    const server = await ensureServer();
+    let desktopEntry;
+    try { desktopEntry = await ensureDesktopEntry(dataDirectory, path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."), VERSION); }
+    catch (error) { process.stderr.write(`${error instanceof Error ? error.message : error}\n`); }
+    console.log(JSON.stringify({ url: server.url, pid: server.pid, desktopEntry })); return;
+  }
   if (args.includes("--stop")) {
+    await stopDesktopEntry(dataDirectory);
     const server = await runningServer();
     if (server) process.kill(server.pid, "SIGTERM");
     console.log(server ? "Dashboard stopped." : "No running dashboard.");
@@ -136,11 +144,13 @@ async function main(): Promise<void> {
   const provider = new RolloutContextProvider();
   const [server, session] = await Promise.all([
     ensureServer(),
-    requested ? Promise.resolve(requested) : provider.latestSessionForDirectory(value("--cwd") || process.cwd()),
+    requested ? Promise.resolve(requested) : args.includes("--recent")
+      ? provider.listSessions(1).then(sessions => sessions[0]?.sessionId ?? null)
+      : provider.latestSessionForDirectory(value("--cwd") || process.cwd()),
   ]);
   const url = new URL(server.url);
   url.searchParams.set("session", session || "no-session-for-project");
-  if (!requested) url.searchParams.set("selection", session ? "recent-project" : "no-project-session");
+  if (!requested) url.searchParams.set("selection", args.includes("--recent") ? "recent-session" : session ? "recent-project" : "no-project-session");
   if (!args.includes("--no-open")) await openBrowser(url.href);
   console.log(JSON.stringify({ url: url.href, pid: server.pid, sessionId: session, startupMs: Math.round(performance.now() - started) }));
 }

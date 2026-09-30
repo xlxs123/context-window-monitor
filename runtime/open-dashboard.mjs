@@ -1,10 +1,10 @@
 // src/open-dashboard.ts
-import { spawn } from "node:child_process";
-import { mkdir, open, readFile as readFile2, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { spawn as spawn2 } from "node:child_process";
+import { mkdir as mkdir2, open, readFile as readFile3, rename, stat, unlink, writeFile as writeFile2 } from "node:fs/promises";
 import { homedir as homedir4 } from "node:os";
-import path5 from "node:path";
+import path6 from "node:path";
 import { fileURLToPath } from "node:url";
-import { setTimeout as delay } from "node:timers/promises";
+import { setTimeout as delay2 } from "node:timers/promises";
 
 // src/context-history-tracker.ts
 var CORRELATION_WINDOW_MS = 45e3;
@@ -339,7 +339,7 @@ async function startDashboard(monitor, provider, projectStatus) {
     }
     const relative = url.pathname.slice(prefix.length);
     if (req.method === "GET" && relative === "health") {
-      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.1", pid: process.pid, projectIntegration: projectStatus?.() }));
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.2", pid: process.pid, projectIntegration: projectStatus?.() }));
       return;
     }
     if (req.method === "GET" && relative === "") {
@@ -575,9 +575,9 @@ function parseRolloutLine(line, selection, state, location) {
   if (!payload) return;
   if (envelopeType === "session_meta") {
     state.sessionId = stringValue(payload.id) ?? state.sessionId;
-    const spawn2 = object(object(object(payload.source)?.subagent)?.thread_spawn);
-    state.parentSessionId = stringValue(spawn2?.parent_thread_id);
-    state.agentName = stringValue(spawn2?.agent_nickname) ?? stringValue(spawn2?.agent_path);
+    const spawn3 = object(object(object(payload.source)?.subagent)?.thread_spawn);
+    state.parentSessionId = stringValue(spawn3?.parent_thread_id);
+    state.agentName = stringValue(spawn3?.agent_nickname) ?? stringValue(spawn3?.agent_path);
     return;
   }
   if (envelopeType === "turn_context") {
@@ -2065,14 +2065,14 @@ ${END}
         } catch (error) {
           if (error.code === "ESRCH") alive = false;
         }
-        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.1", void 0, { numeric: true }) >= 0) {
+        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.2", void 0, { numeric: true }) >= 0) {
           this.status.enabled = false;
           this.status.source = "managed-by-running-service";
           this.stop();
           return this.status;
         }
       }
-      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.1" }));
+      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.2" }));
       const ledgerPath = path4.join(this.dataDirectory, "project-actions.json");
       const ledger = await fs4.readFile(ledgerPath, "utf8").then((text2) => JSON.parse(text2)).catch((error) => {
         if (error.code === "ENOENT") return { files: [] };
@@ -2160,11 +2160,80 @@ script = ""
   }
 };
 
+// src/desktop-entry.ts
+import { spawn } from "node:child_process";
+import { mkdir, readFile as readFile2, writeFile } from "node:fs/promises";
+import path5 from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+async function readDesktopEntry(directory) {
+  try {
+    const value = JSON.parse(await readFile2(path5.join(directory, "desktop-entry.json"), "utf8"));
+    if (value.application !== "context-window-monitor" || !Number.isSafeInteger(value.pid) || value.pid <= 0 || !/^[a-f0-9]{32}$/u.test(value.instanceId) || Date.now() - Date.parse(value.updatedAt) > 15e3 || !Number.isFinite(Date.parse(value.updatedAt))) return null;
+    process.kill(value.pid, 0);
+    return value;
+  } catch {
+    return null;
+  }
+}
+async function stopDesktopEntry(directory) {
+  const entry = await readDesktopEntry(directory);
+  if (entry) await writeFile(path5.join(directory, `desktop-stop-${entry.instanceId}`), "stop", { mode: 384 });
+}
+async function ensureDesktopEntry(directory, pluginRoot, version) {
+  if (process.platform !== "win32" || process.env.CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY === "1") return null;
+  const existing = await readDesktopEntry(directory);
+  if (existing?.version === version) return existing;
+  if (existing) {
+    await stopDesktopEntry(directory);
+    for (let attempt = 0; attempt < 20 && await readDesktopEntry(directory); attempt++) await delay(100);
+  }
+  await mkdir(directory, { recursive: true });
+  const powershell = path5.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const script = path5.join(pluginRoot, "scripts", "desktop-entry.ps1");
+  const literal = (value) => `'${value.replaceAll("'", "''")}'`;
+  const quoteArgument = (value) => `"${value.replace(/(\\*)"/gu, '$1$1\\"').replace(/(\\+)$/u, "$1$1")}"`;
+  const arguments_ = [
+    "-NoProfile",
+    "-NonInteractive",
+    "-STA",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    script,
+    "-DataDirectory",
+    directory,
+    "-NodePath",
+    process.execPath,
+    "-Version",
+    version
+  ].map(quoteArgument).join(" ");
+  const command = `Start-Process -FilePath ${literal(powershell)} -ArgumentList ${literal(arguments_)} -WindowStyle Hidden -ErrorAction Stop`;
+  const child = spawn(powershell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(command, "utf16le").toString("base64")], {
+    windowsHide: true,
+    stdio: "ignore",
+    env: process.env
+  });
+  let failure;
+  child.on("error", (error) => {
+    failure = error;
+  });
+  child.unref();
+  const deadline = Date.now() + 12e3;
+  while (Date.now() < deadline) {
+    if (failure) throw failure;
+    if (child.exitCode !== null && child.exitCode !== 0) throw new Error("Tray launcher could not start.");
+    const entry = await readDesktopEntry(directory);
+    if (entry?.version === version && entry.visible) return entry;
+    await delay(100);
+  }
+  throw new Error("Tray startup timed out. The dashboard service is still available.");
+}
+
 // src/open-dashboard.ts
-var VERSION = "0.4.1";
-var dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path5.join(process.env.CODEX_HOME || path5.join(homedir4(), ".codex"), "context-window-monitor");
-var statePath = path5.join(dataDirectory, `launcher-${VERSION}.json`);
-var lockPath = path5.join(dataDirectory, `launcher-${VERSION}.lock`);
+var VERSION = "0.4.2";
+var dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path6.join(process.env.CODEX_HOME || path6.join(homedir4(), ".codex"), "context-window-monitor");
+var statePath = path6.join(dataDirectory, `launcher-${VERSION}.json`);
+var lockPath = path6.join(dataDirectory, `launcher-${VERSION}.lock`);
 function localUrl(value) {
   if (typeof value !== "string") return false;
   try {
@@ -2176,7 +2245,7 @@ function localUrl(value) {
 }
 async function runningServer() {
   try {
-    const state = JSON.parse(await readFile2(statePath, "utf8"));
+    const state = JSON.parse(await readFile3(statePath, "utf8"));
     if (state.version !== VERSION || !Number.isSafeInteger(state.pid) || state.pid <= 0 || !localUrl(state.url)) return null;
     const response = await fetch(`${state.url}health`, { signal: AbortSignal.timeout(700), redirect: "error" });
     const health = await response.json();
@@ -2186,7 +2255,7 @@ async function runningServer() {
   }
 }
 async function ensureServer() {
-  await mkdir(dataDirectory, { recursive: true });
+  await mkdir2(dataDirectory, { recursive: true });
   const deadline = Date.now() + 1e4;
   while (Date.now() < deadline) {
     const existing = await runningServer();
@@ -2200,7 +2269,7 @@ async function ensureServer() {
         if (Date.now() - (await stat(lockPath)).mtimeMs > 3e4) await unlink(lockPath);
       } catch {
       }
-      await delay(100);
+      await delay2(100);
       continue;
     }
     try {
@@ -2208,10 +2277,10 @@ async function ensureServer() {
       if (recheck) return recheck;
       const launcher = fileURLToPath(import.meta.url);
       const quote = (value) => `'${value.replaceAll("'", "''")}'`;
-      const command = process.platform === "win32" ? path5.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.execPath;
+      const command = process.platform === "win32" ? path6.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.execPath;
       const windowsCommand = `Start-Process -FilePath ${quote(process.execPath)} -ArgumentList ${quote(`"${launcher}" --serve`)} -WindowStyle Hidden -ErrorAction Stop`;
       const arguments_ = process.platform === "win32" ? ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(windowsCommand, "utf16le").toString("base64")] : [launcher, "--serve"];
-      const child = spawn(command, arguments_, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore", env: process.env });
+      const child = spawn2(command, arguments_, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore", env: process.env });
       let spawnError;
       child.on("error", (error) => {
         spawnError = error;
@@ -2222,7 +2291,7 @@ async function ensureServer() {
         if (child.exitCode !== null && (process.platform !== "win32" || child.exitCode !== 0)) throw new Error(`Dashboard exited during startup (${child.exitCode}).`);
         const ready = await runningServer();
         if (ready) return ready;
-        await delay(100);
+        await delay2(100);
       }
       throw new Error("Dashboard startup timed out. Please click the action again.");
     } finally {
@@ -2234,28 +2303,28 @@ async function ensureServer() {
 }
 async function serve() {
   const provider = new RolloutContextProvider();
-  const actions = new ProjectActions({ pluginRoot: path5.resolve(path5.dirname(fileURLToPath(import.meta.url)), ".."), dataDirectory });
+  const actions = new ProjectActions({ pluginRoot: path6.resolve(path6.dirname(fileURLToPath(import.meta.url)), ".."), dataDirectory });
   if (process.env.CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS !== "1") actions.start();
   else actions.status.enabled = false;
   const server = await startDashboard(new ContextMonitorService(provider), provider, () => actions.status);
   const state = { version: VERSION, pid: process.pid, url: server.url };
   const temporary = `${statePath}.${process.pid}.tmp`;
-  await writeFile(temporary, JSON.stringify(state), { mode: 384 });
+  await writeFile2(temporary, JSON.stringify(state), { mode: 384 });
   await rename(temporary, statePath);
   for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => {
     actions.stop();
     void server.close().then(async () => {
-      const saved = await readFile2(statePath, "utf8").catch(() => "{}");
+      const saved = await readFile3(statePath, "utf8").catch(() => "{}");
       if (JSON.parse(saved).pid === process.pid) await unlink(statePath).catch(() => void 0);
       process.exit(0);
     });
   });
 }
 async function openBrowser(url) {
-  const command = process.platform === "win32" ? path5.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.platform === "darwin" ? "open" : "xdg-open";
+  const command = process.platform === "win32" ? path6.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.platform === "darwin" ? "open" : "xdg-open";
   const openCommand = `Start-Process -FilePath '${url.replaceAll("'", "''")}' -ErrorAction Stop`;
   const args = process.platform === "win32" ? ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(openCommand, "utf16le").toString("base64")] : [url];
-  const child = spawn(command, args, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore" });
+  const child = spawn2(command, args, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore" });
   await new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`Browser launcher exited (${code}).`)));
@@ -2269,10 +2338,18 @@ async function main() {
   }
   if (args.includes("--ensure")) {
     const server2 = await ensureServer();
-    console.log(JSON.stringify({ url: server2.url, pid: server2.pid }));
+    let desktopEntry;
+    try {
+      desktopEntry = await ensureDesktopEntry(dataDirectory, path6.resolve(path6.dirname(fileURLToPath(import.meta.url)), ".."), VERSION);
+    } catch (error) {
+      process.stderr.write(`${error instanceof Error ? error.message : error}
+`);
+    }
+    console.log(JSON.stringify({ url: server2.url, pid: server2.pid, desktopEntry }));
     return;
   }
   if (args.includes("--stop")) {
+    await stopDesktopEntry(dataDirectory);
     const server2 = await runningServer();
     if (server2) process.kill(server2.pid, "SIGTERM");
     console.log(server2 ? "Dashboard stopped." : "No running dashboard.");
@@ -2291,11 +2368,11 @@ async function main() {
   const provider = new RolloutContextProvider();
   const [server, session] = await Promise.all([
     ensureServer(),
-    requested ? Promise.resolve(requested) : provider.latestSessionForDirectory(value("--cwd") || process.cwd())
+    requested ? Promise.resolve(requested) : args.includes("--recent") ? provider.listSessions(1).then((sessions) => sessions[0]?.sessionId ?? null) : provider.latestSessionForDirectory(value("--cwd") || process.cwd())
   ]);
   const url = new URL(server.url);
   url.searchParams.set("session", session || "no-session-for-project");
-  if (!requested) url.searchParams.set("selection", session ? "recent-project" : "no-project-session");
+  if (!requested) url.searchParams.set("selection", args.includes("--recent") ? "recent-session" : session ? "recent-project" : "no-project-session");
   if (!args.includes("--no-open")) await openBrowser(url.href);
   console.log(JSON.stringify({ url: url.href, pid: server.pid, sessionId: session, startupMs: Math.round(performance.now() - started) }));
 }

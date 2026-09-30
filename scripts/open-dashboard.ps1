@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$ProjectPath = (Get-Location).Path, [switch]$NoOpen, [switch]$Stop)
+param([string]$ProjectPath = (Get-Location).Path, [switch]$NoOpen, [switch]$Stop, [switch]$Recent)
 $ErrorActionPreference = 'Stop'
 try {
     $nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -9,6 +9,7 @@ try {
     $arguments = @($launcher, '--cwd', $ProjectPath)
     if ($NoOpen) { $arguments += '--no-open' }
     if ($Stop) { $arguments += '--stop' }
+    if ($Recent) { $arguments += '--recent' }
     & $nodePath @arguments
     exit $LASTEXITCODE
 } catch { Write-Error $_ -ErrorAction Continue; exit 1 }

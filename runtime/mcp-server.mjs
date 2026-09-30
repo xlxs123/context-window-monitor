@@ -22484,7 +22484,7 @@ async function startDashboard(monitor2, provider2, projectStatus) {
     }
     const relative = url.pathname.slice(prefix.length);
     if (req.method === "GET" && relative === "health") {
-      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.1", pid: process.pid, projectIntegration: projectStatus?.() }));
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.2", pid: process.pid, projectIntegration: projectStatus?.() }));
       return;
     }
     if (req.method === "GET" && relative === "") {
@@ -22539,14 +22539,14 @@ function autoStartProjectMonitor() {
   if (process.env.CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS === "1") return;
   execFile(process.execPath, [fileURLToPath(new URL("./open-dashboard.mjs", import.meta.url)), "--ensure"], {
     windowsHide: true,
-    timeout: 15e3
+    timeout: 3e4
   }, (error2) => {
-    if (error2) process.stderr.write("Context monitor: automatic project integration could not start. Check Node.js 22.13+ and the local project registry.\n");
+    if (error2) process.stderr.write("Context monitor: automatic startup could not finish. Check Node.js 22.13+ and the tray entry.\n");
   });
 }
 
 // src/mcp-server.ts
-var VERSION = "0.4.1";
+var VERSION = "0.4.2";
 var TEMPLATE_URI = "ui://context-window-monitor/v1.html";
 var UI_SCRIPT_PATH = fileURLToPath2(
   new URL("./ui/context-details-panel.js", import.meta.url)
