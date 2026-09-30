@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "usage": {
+    "precision": "exact",
+    "precisionDetail": "Exact Codex values matched to the active session by a lifecycle hook or explicit session ID.",
+    "usedTokens": 78420,
+    "totalTokens": 200000,
+    "remainingTokens": 121580,
+    "percentage": 39.21,
+    "health": "normal",
+    "model": "gpt-5.6-sol",
+    "sessionId": "fixture-session",
+    "updatedAt": "2026-09-01T00:00:00.000Z",
+    "source": "rollout-log",
+    "usedDefinition": "Last server-reported model input tokens. No text-to-token estimation is used."
+  },
+  "statusText": "Context: 78.4K / 200K · 39.2% · Normal",
+  "exactBreakdown": {
+    "currentModelInputTokens": 78420,
+    "cachedInputTokens": 61200,
+    "cacheWriteInputTokens": 0,
+    "uncachedInputTokens": 17220,
+    "lastOutputTokens": 3810,
+    "reasoningOutputTokens": 1440,
+    "cumulativeThreadTokens": 314880
+  },
+  "unavailableBreakdown": [
+    { "name": "System Instructions", "value": null, "precision": "unavailable" },
+    { "name": "Conversation History", "value": null, "precision": "unavailable" },
+    { "name": "Files / Attachments", "value": null, "precision": "unavailable" },
+    { "name": "Tool Results", "value": null, "precision": "unavailable" },
+    { "name": "Other Context", "value": null, "precision": "unavailable" }
+  ],
+  "recentChanges": [
+    {
+      "id": "change-1",
+      "timestamp": "2026-09-01T00:00:00.000Z",
+      "kind": "increase",
+      "deltaTokens": 3810,
+      "beforeTokens": 74610,
+      "afterTokens": 78420,
+      "label": "Observed near assistant completion",
+      "detail": "The delta is exact; attribution is a time correlation, not a token category split.",
+      "attribution": "observed-correlation"
+    },
+    {
+      "id": "change-2",
+      "timestamp": "2026-08-31T23:58:00.000Z",
+      "kind": "increase",
+      "deltaTokens": 1240,
+      "beforeTokens": 73370,
+      "afterTokens": 74610,
+      "label": "Observed after user message",
+      "detail": "The delta is exact; attribution is a time correlation, not a token category split.",
+      "attribution": "observed-correlation"
+    }
+  ],
+  "compactions": [
+    {
+      "timestamp": "2026-08-31T22:30:00.000Z",
+      "trigger": "auto",
+      "beforeTokens": 176420,
+      "afterTokens": 92180,
+      "reducedTokens": 84240,
+      "precision": "exact",
+      "detail": "Compaction and both surrounding token snapshots were reported by Codex."
+    }
+  ],
+  "cumulativeTokens": 314880,
+  "warnings": [
+    "System/history/files/tool-result token categories are not exposed and are shown as unavailable."
+  ],
+  "refreshIntervalMs": 3000
+}

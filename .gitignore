@@ -1,0 +1,12 @@
+node_modules/
+coverage/
+preview/
+*.log
+output/
+.env
+.env.*
+!.env.example
+.playwright-cli/
+dist/
+__pycache__/
+*.pyc

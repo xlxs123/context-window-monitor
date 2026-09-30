@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "context-window-monitor": {
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/runtime/mcp-server.mjs"],
+      "env": {
+        "CONTEXT_MONITOR_DATA": "${PLUGIN_DATA}",
+        "CONTEXT_MONITOR_PLUGIN_ROOT": "${PLUGIN_ROOT}"
+      }
+    }
+  }
+}

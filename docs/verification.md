@@ -1,0 +1,54 @@
+# 验证记录
+
+## 0.3.0 一键入口（2026-09-30）
+
+- 最终 `npm run check` 的 TypeScript、ESLint、构建和全部 18 项测试通过。
+
+- 开发项目的 `.codex/environments/environment.toml` 已添加「上下文监控」操作；TOML 解析通过，字段与本机 Codex 本地环境操作格式一致。
+- 新增集成验证：并发启动与重复点击复用同一服务、错误保存地址不触发外部连接、陈旧启动锁恢复、项目子目录选择与同名前缀隔离、无匹配时不回退到别的项目。
+- Windows PowerShell 5.1 的嵌套输出管道冷启动验证通过：后台服务继续运行，启动命令正常结束。Node 路径存在多个匹配时只使用第一个程序。
+- 本机 Codex CLI 0.159.0 成功安装并启用 0.3.0；安装器已移除对当前 Codex 中不再提供的 `plugin-creator` Python 助手的依赖，旧安装保留备份。
+- 通过本地环境操作使用的同一 PowerShell 入口启动实际服务；首次启动和后续复用返回相同 PID。实际数据页面已在 Codex 内置浏览器打开，显示黑色仪表盘、0.3 版本、Exact 用量和项目会话选择提示。
+- 顶部操作不传递选中聊天的 ID，默认选择本项目最近活动的会话。顶部按钮本身未通过原生 UI 自动点击；验证范围是配置、实际命令、后台服务和仪表盘页面。默认浏览器交给 Windows 打开，其可见标签页未由当前浏览器连接确认。
+
+以下为 0.2.0 的历史验证记录。
+
+环境：Windows，Node.js 24.16.0，Codex CLI 0.158.0-alpha.2.1。
+
+## 自动化
+
+`npm run check` 执行 TypeScript、ESLint、esbuild、Node test runner。15 项测试通过，覆盖：
+
+- 当前 input 与 cumulative 分离、缺失容量/会话匹配精度、风险等级。
+- 新旧用量 envelope、重复报告去重、模型过滤。
+- 正式压缩事件、没有正式事件时的普通下降、缺少两侧快照时不伪造节省量。
+- 工具 call/result ID 关联、文件结构化路径、完全相同长内容。
+- 公开摘要与加密 reasoning 分离、元数据不携带原文。
+- UTF-8 分段追加、准确字节定位、并发读取、拒绝未保留记录和路径穿越式 Session ID。
+- MCP 初始化、工具发现、真实协议调用、UI resource、本机页面、错误 Host/Origin/路径和未确认原文读取。
+
+生产依赖 `npm audit --omit=dev`：0 项漏洞。插件 manifest / MCP / hooks / skills 通过 `plugin-creator/scripts/validate_plugin.py` 校验。校验器的 PyYAML 临时依赖仅放在 `output/validator-deps`，不进入交付包。
+
+发布包解压后独立启动 `runtime/dashboard.mjs`，本机 HTTP 返回 200，成功读取真实 Session 的 Exact 用量和活动元数据。ZIP 完整性检查通过，不含 `node_modules`、会话日志或本地测试输出。
+
+安装脚本 `scripts/install-local.ps1` 已在 Windows PowerShell 5.1 通过 `-CheckOnly` 环境预检。JSON 按 UTF-8 读取；预检不复制文件、不更改安装状态。安装与版本验证在用户运行不带 `-CheckOnly` 的命令时执行。
+
+## 浏览器
+
+通过 Playwright 实际打开读取本机会话的生产仪表盘：
+
+- 成功读入真实 Codex 用量及日志元数据；未读取原文。
+- 9 个页面依次切换并验证目标标题。
+- 1440 px 桌面与 390 px 窄屏检查，页面不横向溢出。
+- 控制台 0 errors、0 warnings。
+- 查看截图修正了窄屏导航按钮挤压问题。
+
+使用明确标注的合成数据进一步验证：全量/增量切换、选中柱形、Top 数量、收起/展开、类别与文字筛选、检查器与原文默认禁用、快照 A/B 选择、缺少压缩前后快照时显示提示、JSON 下载。导出文件不包含原文。390 px 下导航按钮文字不再挤压，导航条可以独立滚动。
+
+截图位于开发目录 `output/playwright/`。分发包不包含本机会话截图、日志、环境数据或 `node_modules`。
+
+## 验证边界
+
+2026-09-29 修复普通 PowerShell 无法解析 `codex` 的安装问题：在子进程 PATH 中移除 Codex 目录后，Windows PowerShell 5.1 的预检与完整安装均通过。安装结果为 `0.2.0+codex.20260929023835`，installed / enabled 均为 true，旧版已备份。安装缓存内的 MCP 服务、UI、hook、配置和技能共 6 个关键文件与源码哈希一致；从缓存启动 MCP 后发现 4 个工具，实际会话用量返回 Exact。
+
+已验证 MCP 服务、本机仪表盘、实际 Codex 日志及 Codex 插件安装，没有安装到 DSH。内嵌 MCP Apps 桥接按官方协议实现，当前 Codex 宿主中的原生卡片渲染不作为已验证能力；本地浏览器面板是可用入口。
