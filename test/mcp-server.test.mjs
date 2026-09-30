@@ -64,7 +64,7 @@ test("MCP server exposes tools, exact data, and the UI resource", async (context
 
   const child = spawn(process.execPath, ["runtime/mcp-server.mjs"], {
     cwd: process.cwd(),
-    env: { ...process.env, CONTEXT_MONITOR_DATA: dataDirectory },
+    env: { ...process.env, CONTEXT_MONITOR_DATA: dataDirectory, CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS: "1" },
     stdio: ["pipe", "pipe", "pipe"],
   });
   context.after(async () => {

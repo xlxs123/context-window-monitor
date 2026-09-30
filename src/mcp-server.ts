@@ -10,8 +10,9 @@ import type { ContextDashboard } from "./context-types.js";
 import { RolloutContextProvider } from "./providers/rollout-context-provider.js";
 import { SessionRegistry } from "./providers/session-registry.js";
 import { startDashboard } from "./dashboard-server.js";
+import { autoStartProjectMonitor } from "./auto-start.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 const TEMPLATE_URI = "ui://context-window-monitor/v1.html";
 const UI_SCRIPT_PATH = fileURLToPath(
   new URL("./ui/context-details-panel.js", import.meta.url),
@@ -202,4 +203,5 @@ server.registerTool("read_context_item",{
 });
 
 await server.connect(new StdioServerTransport());
+autoStartProjectMonitor();
 process.stdin.on("end",()=>{void localDashboard?.then(d=>d.close());});

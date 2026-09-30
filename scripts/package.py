@@ -13,7 +13,7 @@ entries = [
     ".codex-plugin", ".mcp.json", "hooks", "skills", "runtime", "src",
     "scripts", "test", "docs", "package.json", "package-lock.json",
     "tsconfig.json", "eslint.config.mjs", ".gitignore", "README.md",
-    "CHANGELOG.md", "LICENSE",
+    "CHANGELOG.md", "LICENSE", "Install.cmd",
 ]
 files = []
 for entry in entries:

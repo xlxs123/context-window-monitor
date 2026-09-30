@@ -1,4 +1,6 @@
 export type { ContextProvider, ContextProviderOptions } from "./context-provider.js";
+export { discoverProjects } from "./project-registry.js";
+export { ProjectActions } from "./project-actions.js";
 export { ContextHistoryTracker } from "./context-history-tracker.js";
 export { ContextMonitorService } from "./context-monitor-service.js";
 export { ContextStatusBar } from "./context-status-bar.js";

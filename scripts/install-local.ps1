@@ -30,7 +30,11 @@ try {
     $marketplacePath = Join-Path $env:USERPROFILE '.agents\plugins\marketplace.json'
     $entries = @('.codex-plugin', '.mcp.json', 'runtime', 'hooks', 'skills', 'scripts', 'docs', 'README.md', 'LICENSE')
 
-    $null = Get-Command node -CommandType Application -ErrorAction Stop
+    $nodeExecutable = (Get-Command node -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+    $nodeVersion = & $nodeExecutable -p 'process.versions.node'
+    if ($LASTEXITCODE -ne 0 -or [Version]$nodeVersion -lt [Version]'22.13.0') {
+        throw 'Node.js 22.13 or newer is required. Install a current Node.js LTS release, then retry.'
+    }
     $codexExecutable = Resolve-CodexExecutable
     Write-Host "Codex CLI: $codexExecutable"
     & $codexExecutable --version
@@ -46,13 +50,26 @@ try {
         throw 'Run this installer from the development folder or extracted release package.'
     }
 
-    $marketplace = Get-Content -LiteralPath $marketplacePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $marketplaceExists = Test-Path -LiteralPath $marketplacePath -PathType Leaf
+    if ($marketplaceExists) {
+        $marketplace = Get-Content -LiteralPath $marketplacePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    } else {
+        $marketplace = [PSCustomObject]@{ name = 'personal'; interface = @{ displayName = 'Personal' }; plugins = @() }
+    }
     $marketplaceName = $marketplace.name
     if ($marketplaceName -notmatch '^[A-Za-z0-9_-]+$') { throw 'Invalid marketplace name.' }
     $matching = @($marketplace.plugins | Where-Object { $_.name -eq $manifest.name })
-    if ($matching.Count -ne 1 -or $matching[0].source.source -ne 'local') {
-        throw 'The existing local marketplace entry could not be verified.'
+    if ($matching.Count -eq 0) {
+        $marketplace.plugins = @($marketplace.plugins) + @([PSCustomObject]@{
+            name = $manifest.name
+            source = @{ source = 'local'; path = './plugins/context-window-monitor' }
+            policy = @{ installation = 'AVAILABLE'; authentication = 'ON_INSTALL' }
+            category = 'Productivity'
+        })
+    } elseif ($matching.Count -ne 1 -or $matching[0].source.source -ne 'local') {
+        throw 'An incompatible marketplace entry already exists; it was not changed.'
     }
+    $matching = @($marketplace.plugins | Where-Object { $_.name -eq $manifest.name })
     $registeredPath = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE $matching[0].source.path))
     if ($registeredPath -ne [IO.Path]::GetFullPath($targetRoot)) {
         throw "Marketplace points to a different folder: $registeredPath"
@@ -67,6 +84,11 @@ try {
         $backupPath = "$targetRoot.backup-$(Get-Date -Format yyyyMMdd-HHmmss)-$([Guid]::NewGuid().ToString('N').Substring(0,8))"
         Copy-Item -LiteralPath $targetRoot -Destination $backupPath -Recurse
         Write-Host "Backup: $backupPath"
+        $oldLauncher = Join-Path $targetRoot 'runtime\open-dashboard.mjs'
+        if (Test-Path -LiteralPath $oldLauncher -PathType Leaf) {
+            & $nodeExecutable $oldLauncher --stop
+            if ($LASTEXITCODE -ne 0) { throw 'Could not stop the previous dashboard service.' }
+        }
     } else {
         $null = New-Item -ItemType Directory -Path $targetRoot -Force
     }
@@ -79,6 +101,16 @@ try {
     $targetManifest = Get-Content -LiteralPath $targetManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $targetManifest.version = ($manifest.version -split '\+')[0] + '+codex.' + [DateTime]::UtcNow.ToString('yyyyMMddHHmmssfff')
     [IO.File]::WriteAllText($targetManifestPath, ($targetManifest | ConvertTo-Json -Depth 30) + "`n", (New-Object System.Text.UTF8Encoding($false)))
+
+    $marketplaceJson = ($marketplace | ConvertTo-Json -Depth 30) + "`n"
+    if (-not $marketplaceExists -or (Get-Content -LiteralPath $marketplacePath -Raw -Encoding UTF8) -ne $marketplaceJson) {
+        if ($marketplaceExists) { Copy-Item -LiteralPath $marketplacePath -Destination "$marketplacePath.backup-$([Guid]::NewGuid().ToString('N'))" }
+        $null = New-Item -ItemType Directory -Path (Split-Path -Parent $marketplacePath) -Force
+        [IO.File]::WriteAllText($marketplacePath, $marketplaceJson, (New-Object System.Text.UTF8Encoding($false)))
+    }
+    # Register through the supported CLI as well, including nonstandard home layouts.
+    & $codexExecutable plugin marketplace add $env:USERPROFILE
+    if ($LASTEXITCODE -ne 0) { throw 'Could not register the local plugin marketplace.' }
 
     $selector = "$($manifest.name)@$marketplaceName"
     Write-Host "Installing $selector ..."
@@ -95,7 +127,9 @@ try {
         throw "Installed version differs from the package: $($installed[0].version)"
     }
     Write-Host "SUCCESS: $selector $($installed[0].version) is installed and enabled."
-    Write-Host 'Use the context-monitor project action, or run scripts\open-dashboard.ps1. MCP updates apply to new Codex chats.'
+    & $nodeExecutable (Join-Path $targetRoot 'runtime\open-dashboard.mjs') --ensure
+    if ($LASTEXITCODE -ne 0) { throw 'Plugin installed, but automatic project integration did not start.' }
+    Write-Host 'Project actions are now managed automatically. Switch projects or reopen Codex once to refresh its toolbar. No chat command is needed.'
 } catch {
     Write-Error $_ -ErrorAction Continue
     exit 1

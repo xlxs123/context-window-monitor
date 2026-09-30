@@ -3104,6 +3104,7 @@ var require_utils = __commonJS({
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
+    var isPort = RegExp.prototype.test.bind(/^\d*$/u);
     var isHexPair = RegExp.prototype.test.bind(/^[\da-f]{2}$/iu);
     var isUnreserved = RegExp.prototype.test.bind(/^[\da-z\-._~]$/iu);
     var isPathCharacter = RegExp.prototype.test.bind(/^[A-Za-z0-9\-._~!$&'()*+,;=:@/]$/u);
@@ -3569,8 +3570,12 @@ var require_utils = __commonJS({
         uriTokens.push(host);
       }
       if (typeof component.port === "number" || typeof component.port === "string") {
+        const port = String(component.port);
+        if (!isPort(port)) {
+          throw new TypeError("URI port is malformed.");
+        }
         uriTokens.push(":");
-        uriTokens.push(String(component.port));
+        uriTokens.push(port);
       }
       return uriTokens.length ? uriTokens.join("") : void 0;
     }
@@ -4013,12 +4018,15 @@ var require_fast_uri = __commonJS({
       }
       return false;
     }
+    function isIPLiteral(host) {
+      return host[0] === "[" && host[host.length - 1] === "]";
+    }
     function hasMalformedComponentPercentEncoding(matches) {
       const host = matches[4];
-      return hasMalformedPercentEncoding(matches[3]) || host !== void 0 && !(host[0] === "[" && host[host.length - 1] === "]") && hasMalformedPercentEncoding(host) || hasMalformedPercentEncoding(matches[6]) || hasMalformedPercentEncoding(matches[7]) || hasMalformedPercentEncoding(matches[8]);
+      return hasMalformedPercentEncoding(matches[3]) || host !== void 0 && !isIPLiteral(host) && hasMalformedPercentEncoding(host) || hasMalformedPercentEncoding(matches[6]) || hasMalformedPercentEncoding(matches[7]) || hasMalformedPercentEncoding(matches[8]);
     }
     function canonicalizeHost(parsed, options, schemeHandler, isIP) {
-      if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport) && parsed.host && parsed.host[0] !== "[" && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP === false && nonSimpleDomain(parsed.host)) {
+      if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport) && parsed.host && !isIPLiteral(parsed.host) && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP === false && nonSimpleDomain(parsed.host)) {
         try {
           parsed.host = new URL("http://" + parsed.host).hostname;
         } catch (e) {
@@ -4105,10 +4113,11 @@ var require_fast_uri = __commonJS({
         if (parsed.host) {
           const ipv4result = isIPv4(parsed.host);
           if (ipv4result === false) {
-            const bracketedIPLiteral = parsed.host[0] === "[" && parsed.host[parsed.host.length - 1] === "]";
+            const bracketedIPLiteral = isIPLiteral(parsed.host);
+            const hasIPLiteralBracket = parsed.host.indexOf("[") !== -1 || parsed.host.indexOf("]") !== -1;
             const ipv6result = normalizeIPv6(parsed.host);
             isIP = ipv6result.isIPV6 || ipv6result.isIPVFuture === true;
-            malformedIPLiteral = bracketedIPLiteral && ipv6result.error === true;
+            malformedIPLiteral = hasIPLiteralBracket && (!bracketedIPLiteral || ipv6result.error === true);
             parsed.host = isIP ? ipv6result.host : ipv6result.host.toLowerCase();
             if (malformedIPLiteral) {
               parsed.error = parsed.error || "URI host is malformed.";
@@ -4131,14 +4140,17 @@ var require_fast_uri = __commonJS({
           parsed.error = parsed.error || "URI is not a " + options.reference + " reference.";
         }
         const schemeHandler = getSchemeHandler(options.scheme || parsed.scheme);
-        malformedHost = canonicalizeHost(parsed, options, schemeHandler, isIP);
-        if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
-          if (uri.indexOf("%") !== -1) {
-            if (parsed.host !== void 0 && !malformedIPLiteral) {
-              const host = isIP ? parsed.host : normalizePercentEncoding(parsed.host, true);
-              parsed.host = reescapeHostDelimiters(host, isIP);
-            }
+        if (!malformedIPLiteral) {
+          malformedHost = canonicalizeHost(parsed, options, schemeHandler, isIP);
+        }
+        if (uri.indexOf("%") !== -1 && parsed.host !== void 0 && !malformedIPLiteral) {
+          let host = isIP ? parsed.host : normalizePercentEncoding(parsed.host, true);
+          if (!isIP) {
+            host = normalizePercentEncoding(host.toLowerCase());
           }
+          parsed.host = reescapeHostDelimiters(host, isIP);
+        }
+        if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
           if (parsed.path) {
             parsed.path = normalizePathEncoding(parsed.path);
           }
@@ -7184,7 +7196,7 @@ var require_dist = __commonJS({
 
 // src/mcp-server.ts
 import { promises as fs3 } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -22446,7 +22458,7 @@ var RolloutContextProvider = class {
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
-async function startDashboard(monitor2, provider2) {
+async function startDashboard(monitor2, provider2, projectStatus) {
   const capability = randomBytes(24).toString("hex");
   const prefix = `/${capability}/`;
   const script = await readFile(new URL("./ui/context-details-panel.js", import.meta.url), "utf8");
@@ -22472,7 +22484,7 @@ async function startDashboard(monitor2, provider2) {
     }
     const relative = url.pathname.slice(prefix.length);
     if (req.method === "GET" && relative === "health") {
-      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.3.0", pid: process.pid }));
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.0", pid: process.pid, projectIntegration: projectStatus?.() }));
       return;
     }
     if (req.method === "GET" && relative === "") {
@@ -22520,10 +22532,23 @@ async function startDashboard(monitor2, provider2) {
   }) };
 }
 
+// src/auto-start.ts
+import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
+function autoStartProjectMonitor() {
+  if (process.env.CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS === "1") return;
+  execFile(process.execPath, [fileURLToPath(new URL("./open-dashboard.mjs", import.meta.url)), "--ensure"], {
+    windowsHide: true,
+    timeout: 15e3
+  }, (error2) => {
+    if (error2) process.stderr.write("Context monitor: automatic project integration could not start. Check Node.js 22.13+ and the local project registry.\n");
+  });
+}
+
 // src/mcp-server.ts
-var VERSION = "0.3.0";
+var VERSION = "0.4.0";
 var TEMPLATE_URI = "ui://context-window-monitor/v1.html";
-var UI_SCRIPT_PATH = fileURLToPath(
+var UI_SCRIPT_PATH = fileURLToPath2(
   new URL("./ui/context-details-panel.js", import.meta.url)
 );
 var registry2 = new SessionRegistry();
@@ -22691,6 +22716,7 @@ server.registerTool("read_context_item", {
   return { structuredContent: item, content: [{ type: "text", text: JSON.stringify(item) }] };
 });
 await server.connect(new StdioServerTransport());
+autoStartProjectMonitor();
 process.stdin.on("end", () => {
   void localDashboard?.then((d) => d.close());
 });

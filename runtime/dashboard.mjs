@@ -1024,7 +1024,7 @@ var RolloutContextProvider = class {
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
-async function startDashboard(monitor, provider2) {
+async function startDashboard(monitor, provider2, projectStatus) {
   const capability = randomBytes(24).toString("hex");
   const prefix = `/${capability}/`;
   const script = await readFile(new URL("./ui/context-details-panel.js", import.meta.url), "utf8");
@@ -1050,7 +1050,7 @@ async function startDashboard(monitor, provider2) {
     }
     const relative = url.pathname.slice(prefix.length);
     if (req.method === "GET" && relative === "health") {
-      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.3.0", pid: process.pid }));
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.0", pid: process.pid, projectIntegration: projectStatus?.() }));
       return;
     }
     if (req.method === "GET" && relative === "") {

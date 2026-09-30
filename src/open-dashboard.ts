@@ -7,8 +7,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import { ContextMonitorService } from "./context-monitor-service.js";
 import { startDashboard } from "./dashboard-server.js";
 import { RolloutContextProvider } from "./providers/rollout-context-provider.js";
+import { ProjectActions } from "./project-actions.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 const dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path.join(process.env.CODEX_HOME || path.join(homedir(), ".codex"), "context-window-monitor");
 const statePath = path.join(dataDirectory, `launcher-${VERSION}.json`);
 const lockPath = path.join(dataDirectory, `launcher-${VERSION}.lock`);
@@ -82,12 +83,16 @@ async function ensureServer(): Promise<ServerState> {
 
 async function serve(): Promise<void> {
   const provider = new RolloutContextProvider();
-  const server = await startDashboard(new ContextMonitorService(provider), provider);
+  const actions = new ProjectActions({ pluginRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."), dataDirectory });
+  if (process.env.CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS !== "1") actions.start();
+  else actions.status.enabled = false;
+  const server = await startDashboard(new ContextMonitorService(provider), provider, () => actions.status);
   const state: ServerState = { version: VERSION, pid: process.pid, url: server.url };
   const temporary = `${statePath}.${process.pid}.tmp`;
   await writeFile(temporary, JSON.stringify(state), { mode: 0o600 });
   await rename(temporary, statePath);
   for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => {
+    actions.stop();
     void server.close().then(async () => {
       const saved = await readFile(statePath, "utf8").catch(() => "{}");
       if (JSON.parse(saved).pid === process.pid) await unlink(statePath).catch(() => undefined);
@@ -111,6 +116,7 @@ async function openBrowser(url: string): Promise<void> {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--serve")) { await serve(); return; }
+  if (args.includes("--ensure")) { const server = await ensureServer(); console.log(JSON.stringify({ url: server.url, pid: server.pid })); return; }
   if (args.includes("--stop")) {
     const server = await runningServer();
     if (server) process.kill(server.pid, "SIGTERM");

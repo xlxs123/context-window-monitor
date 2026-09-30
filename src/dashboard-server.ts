@@ -5,7 +5,7 @@ import type { ContextMonitorService } from "./context-monitor-service.js";
 import type { RolloutContextProvider } from "./providers/rollout-context-provider.js";
 
 /** Local UI for Codex hosts without inline MCP Apps. Random capability path, no public listener. */
-export async function startDashboard(monitor:ContextMonitorService,provider:RolloutContextProvider){
+export async function startDashboard(monitor:ContextMonitorService,provider:RolloutContextProvider,projectStatus?:()=>unknown){
   const capability=randomBytes(24).toString("hex");const prefix=`/${capability}/`;
   const script=await readFile(new URL("./ui/context-details-panel.js",import.meta.url),"utf8");
   const server=createServer(async(req,res)=>{
@@ -18,7 +18,7 @@ export async function startDashboard(monitor:ContextMonitorService,provider:Roll
     if(!url.pathname.startsWith(prefix)){res.writeHead(404).end();return;}
     const relative=url.pathname.slice(prefix.length);
     if(req.method==="GET"&&relative==="health"){
-      res.writeHead(200,{"Content-Type":"application/json"}).end(JSON.stringify({application:"context-window-monitor",version:"0.3.0",pid:process.pid}));return;
+      res.writeHead(200,{"Content-Type":"application/json"}).end(JSON.stringify({application:"context-window-monitor",version:"0.4.0",pid:process.pid,projectIntegration:projectStatus?.()}));return;
     }
     if(req.method==="GET"&&relative===""){
       res.writeHead(200,{"Content-Type":"text/html; charset=utf-8"}).end('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Codex 上下文监控</title><link rel="icon" href="data:,"></head><body><div id="root" data-local-dashboard="true"></div><script type="module" src="app.js"></script></body></html>');return;

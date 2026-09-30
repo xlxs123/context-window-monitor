@@ -13,7 +13,7 @@ const shared = {
   sourcemap: false,
   legalComments: "none",
   logLevel: "info",
-  target: "node18",
+  target: "node22",
 };
 
 await Promise.all([
