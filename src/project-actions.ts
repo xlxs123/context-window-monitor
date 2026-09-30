@@ -24,12 +24,21 @@ async function atomicWrite(file: string, text: string): Promise<void> {
   finally { await fs.unlink(temporary).catch(() => undefined); }
 }
 function managedSpan(text: string): { start: number; end: number; block: string } | null {
-  const start = text.lastIndexOf(`${BEGIN}\n`);
-  if (start < 0) return null;
-  const ending = text.indexOf(`${END}\n`, start);
-  if (ending < 0 || (start !== 0 && text[start - 1] !== "\n")) throw new Error("Invalid managed action boundary");
-  const end = ending + END.length + 1;
+  const starts = [...text.matchAll(/^# BEGIN context-window-monitor managed action\r?\n/gmu)];
+  if (!starts.length) {
+    if (text.includes(BEGIN)) throw new Error("Invalid managed action boundary");
+    return null;
+  }
+  if (starts.length !== 1) throw new Error("Duplicate managed action boundary");
+  const start = starts[0]!.index;
+  const ending = /^# END context-window-monitor managed action(?:\r?\n|$)/mu.exec(text.slice(start));
+  if (!ending) throw new Error("Invalid managed action boundary");
+  const end = start + ending.index + ending[0].length;
   return { start, end, block: text.slice(start, end) };
+}
+function sameBlock(a: string, b: string): boolean {
+  const normalize = (value: string): string => value.replaceAll("\r\n", "\n").replace(/\n$/u, "");
+  return normalize(a) === normalize(b);
 }
 
 export class ProjectActions {
@@ -52,8 +61,11 @@ export class ProjectActions {
   private actionBlock(): string {
     const platform = this.options.platform || process.platform;
     const quoted = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
+    // EncodedCommand is a shell-safe token even for paths containing $, quotes
+    // or backticks. The PowerShell script uses a literal, single-quoted path.
+    const windowsScript = `& '${path.join(this.options.pluginRoot, "scripts", "open-dashboard.ps1").replaceAll("'", "''")}'`;
     const command = platform === "win32"
-      ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${path.join(this.options.pluginRoot, "scripts", "open-dashboard.ps1")}"`
+      ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${Buffer.from(windowsScript, "utf16le").toString("base64")}`
       : `${quoted(this.options.nodePath || process.execPath)} ${quoted(path.join(this.options.pluginRoot, "runtime", "open-dashboard.mjs"))}`;
     return `${BEGIN}\n[[actions]]\nname = "上下文监控"\nicon = "tool"\ncommand = ${JSON.stringify(command)}\nplatform = ${JSON.stringify(platform)}\n${END}\n`;
   }
@@ -79,7 +91,8 @@ export class ProjectActions {
     }
   }
   private async removeManaged(entry: ManagedFile): Promise<void> {
-    if (!await exists(entry.root) || !await exists(entry.file)) return;
+    if (!await exists(entry.root)) throw new Error("Project root unavailable; retry cleanup later");
+    if (!await exists(entry.file)) return;
     const expected = path.join(entry.root, ".codex", "environments");
     if (!samePath(path.dirname(entry.file), expected)) throw new Error("Invalid managed path");
     await this.safeConfig(entry.root, entry.file);
@@ -87,7 +100,7 @@ export class ProjectActions {
     parse(before);
     const span = managedSpan(before);
     // Only remove the exact block we wrote. User edits take precedence.
-    if (!span || span.block !== entry.block) return;
+    if (!span || !sameBlock(span.block, entry.block)) return;
     const after = before.slice(0, span.start) + before.slice(span.end);
     parse(after);
     if (entry.created && after === entry.base) {
@@ -122,11 +135,11 @@ export class ProjectActions {
       if (owner && owner.pid !== process.pid && Number.isSafeInteger(owner.pid) && owner.pid > 0) {
         let alive = true;
         try { process.kill(owner.pid, 0); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ESRCH") alive = false; }
-        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.0", undefined, { numeric: true }) >= 0) {
+        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.1", undefined, { numeric: true }) >= 0) {
           this.status.enabled = false; this.status.source = "managed-by-running-service"; this.stop(); return this.status;
         }
       }
-      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.0" }));
+      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.1" }));
       const ledgerPath = path.join(this.dataDirectory, "project-actions.json");
       const ledger: Ledger = await fs.readFile(ledgerPath, "utf8").then(text => JSON.parse(text)).catch(error => {
         if (error.code === "ENOENT") return { files: [] };
@@ -156,7 +169,7 @@ export class ProjectActions {
             const document = parse(before);
             const previous = ledger.files.find(entry => samePath(entry.file, file));
             const span = managedSpan(before);
-            if (span && (!previous || span.block !== previous.block)) throw new Error("Managed action edited externally");
+            if (span && (!previous || !sameBlock(span.block, previous.block))) throw new Error("Managed action edited externally");
             const actions = document.actions;
             if (actions !== undefined && !Array.isArray(actions)) throw new Error("Unsupported actions format");
             // Preserve a pre-existing functional monitor action without duplicating it.

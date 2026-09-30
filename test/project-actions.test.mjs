@@ -109,6 +109,39 @@ test("legacy local-projects fallback ignores stale history and does not guess mi
   assert.deepEqual((await discoverProjects(directory)).projects, [{ id: "one", name: "Project", root: directory }]);
 });
 
+test("CRLF editing keeps action ownership and offline deleted projects are cleaned when they return", async context => {
+  const f = await fixture(context);
+  const root = await f.add("Line endings");
+  const original = 'version = 1\r\nname = "Existing"\r\n[setup]\r\nscript = ""\r\n';
+  await mkdir(path.dirname(config(root)), { recursive: true });
+  await writeFile(config(root), original);
+  await f.actions.sync();
+  const before = await readFile(config(root), "utf8");
+  await writeFile(config(root), before.replace(/\r?\n/g, "\r\n").trimEnd());
+  assert.deepEqual((await f.actions.sync()).errors, []);
+  assert.equal(parse(await readFile(config(root), "utf8")).actions.length, 1);
+  await rename(root, root + "-offline"); f.remove("Line endings");
+  assert.equal((await f.actions.sync()).errors.length, 1);
+  const ledger = JSON.parse(await readFile(path.join(f.dataDirectory, "project-actions.json"), "utf8"));
+  assert.equal(ledger.files.length, 1);
+  await rename(root + "-offline", root);
+  assert.deepEqual((await f.actions.sync()).errors, []);
+  assert.equal(await readFile(config(root), "utf8"), original);
+});
+
+test("Windows action invokes a literal plugin path containing shell metacharacters", { skip: process.platform !== "win32" }, async context => {
+  const f = await fixture(context);
+  const root = await f.add("Literal paths");
+  const pluginRoot = path.join(f.directory, "$dollar `tick 'quote (spaces)");
+  await mkdir(path.join(pluginRoot, "scripts"), { recursive: true });
+  await writeFile(path.join(pluginRoot, "scripts", "open-dashboard.ps1"), 'Write-Output "literal-path-success"\n');
+  const actions = new ProjectActions({ codexHome: f.codexHome, dataDirectory: f.dataDirectory, pluginRoot });
+  await actions.sync();
+  const command = parse(await readFile(config(root), "utf8")).actions[0].command;
+  const result = await execute("powershell.exe", ["-NoProfile", "-Command", command], { windowsHide: true, timeout: 10000 });
+  assert.equal(result.stdout.trim(), "literal-path-success");
+});
+
 test("MCP startup creates actions without any tool calls and keeps following project changes", { timeout: 25000 }, async context => {
   const f = await fixture(context);
   const first = await f.add("Initial");
@@ -122,7 +155,7 @@ test("MCP startup creates actions without any tool calls and keeps following pro
   };
   try {
     await until(() => stat(config(first)).then(() => true, () => false));
-    const state = JSON.parse(await readFile(path.join(f.dataDirectory, "launcher-0.4.0.json"), "utf8"));
+    const state = JSON.parse(await readFile(path.join(f.dataDirectory, "launcher-0.4.1.json"), "utf8"));
     const health = () => fetch(state.url + "health").then(r => r.json());
     await until(async () => (await health()).projectIntegration.configured === 1);
     assert.equal(output, "", "auto initialization must not emit unsolicited MCP stdout");

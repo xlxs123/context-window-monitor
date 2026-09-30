@@ -22484,7 +22484,7 @@ async function startDashboard(monitor2, provider2, projectStatus) {
     }
     const relative = url.pathname.slice(prefix.length);
     if (req.method === "GET" && relative === "health") {
-      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.0", pid: process.pid, projectIntegration: projectStatus?.() }));
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.1", pid: process.pid, projectIntegration: projectStatus?.() }));
       return;
     }
     if (req.method === "GET" && relative === "") {
@@ -22546,7 +22546,7 @@ function autoStartProjectMonitor() {
 }
 
 // src/mcp-server.ts
-var VERSION = "0.4.0";
+var VERSION = "0.4.1";
 var TEMPLATE_URI = "ui://context-window-monitor/v1.html";
 var UI_SCRIPT_PATH = fileURLToPath2(
   new URL("./ui/context-details-panel.js", import.meta.url)

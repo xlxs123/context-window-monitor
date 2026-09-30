@@ -824,14 +824,21 @@ async function atomicWrite(file, text2) {
   }
 }
 function managedSpan(text2) {
-  const start = text2.lastIndexOf(`${BEGIN}
-`);
-  if (start < 0) return null;
-  const ending = text2.indexOf(`${END}
-`, start);
-  if (ending < 0 || start !== 0 && text2[start - 1] !== "\n") throw new Error("Invalid managed action boundary");
-  const end = ending + END.length + 1;
+  const starts = [...text2.matchAll(/^# BEGIN context-window-monitor managed action\r?\n/gmu)];
+  if (!starts.length) {
+    if (text2.includes(BEGIN)) throw new Error("Invalid managed action boundary");
+    return null;
+  }
+  if (starts.length !== 1) throw new Error("Duplicate managed action boundary");
+  const start = starts[0].index;
+  const ending = /^# END context-window-monitor managed action(?:\r?\n|$)/mu.exec(text2.slice(start));
+  if (!ending) throw new Error("Invalid managed action boundary");
+  const end = start + ending.index + ending[0].length;
   return { start, end, block: text2.slice(start, end) };
+}
+function sameBlock(a, b) {
+  const normalize = (value) => value.replaceAll("\r\n", "\n").replace(/\n$/u, "");
+  return normalize(a) === normalize(b);
 }
 var ProjectActions = class {
   constructor(options) {
@@ -859,7 +866,8 @@ var ProjectActions = class {
   actionBlock() {
     const platform = this.options.platform || process.platform;
     const quoted = (value) => `'${value.replaceAll("'", "'\\''")}'`;
-    const command = platform === "win32" ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${path2.join(this.options.pluginRoot, "scripts", "open-dashboard.ps1")}"` : `${quoted(this.options.nodePath || process.execPath)} ${quoted(path2.join(this.options.pluginRoot, "runtime", "open-dashboard.mjs"))}`;
+    const windowsScript = `& '${path2.join(this.options.pluginRoot, "scripts", "open-dashboard.ps1").replaceAll("'", "''")}'`;
+    const command = platform === "win32" ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${Buffer.from(windowsScript, "utf16le").toString("base64")}` : `${quoted(this.options.nodePath || process.execPath)} ${quoted(path2.join(this.options.pluginRoot, "runtime", "open-dashboard.mjs"))}`;
     return `${BEGIN}
 [[actions]]
 name = "\u4E0A\u4E0B\u6587\u76D1\u63A7"
@@ -893,14 +901,15 @@ ${END}
     }
   }
   async removeManaged(entry) {
-    if (!await exists(entry.root) || !await exists(entry.file)) return;
+    if (!await exists(entry.root)) throw new Error("Project root unavailable; retry cleanup later");
+    if (!await exists(entry.file)) return;
     const expected = path2.join(entry.root, ".codex", "environments");
     if (!samePath(path2.dirname(entry.file), expected)) throw new Error("Invalid managed path");
     await this.safeConfig(entry.root, entry.file);
     const before = await fs2.readFile(entry.file, "utf8");
     parse(before);
     const span = managedSpan(before);
-    if (!span || span.block !== entry.block) return;
+    if (!span || !sameBlock(span.block, entry.block)) return;
     const after = before.slice(0, span.start) + before.slice(span.end);
     parse(after);
     if (entry.created && after === entry.base) {
@@ -948,14 +957,14 @@ ${END}
         } catch (error) {
           if (error.code === "ESRCH") alive = false;
         }
-        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.0", void 0, { numeric: true }) >= 0) {
+        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.1", void 0, { numeric: true }) >= 0) {
           this.status.enabled = false;
           this.status.source = "managed-by-running-service";
           this.stop();
           return this.status;
         }
       }
-      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.0" }));
+      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.1" }));
       const ledgerPath = path2.join(this.dataDirectory, "project-actions.json");
       const ledger = await fs2.readFile(ledgerPath, "utf8").then((text2) => JSON.parse(text2)).catch((error) => {
         if (error.code === "ENOENT") return { files: [] };
@@ -988,7 +997,7 @@ ${END}
             const document = parse(before);
             const previous = ledger.files.find((entry) => samePath(entry.file, file));
             const span = managedSpan(before);
-            if (span && (!previous || span.block !== previous.block)) throw new Error("Managed action edited externally");
+            if (span && (!previous || !sameBlock(span.block, previous.block))) throw new Error("Managed action edited externally");
             const actions = document.actions;
             if (actions !== void 0 && !Array.isArray(actions)) throw new Error("Unsupported actions format");
             if (!span && Array.isArray(actions) && actions.some((action) => typeof action === "object" && action !== null && String(action.command).includes("context-window-monitor") && /open-dashboard\.(ps1|mjs)/u.test(String(action.command)))) {

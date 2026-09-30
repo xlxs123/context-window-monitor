@@ -9,7 +9,7 @@ import { startDashboard } from "./dashboard-server.js";
 import { RolloutContextProvider } from "./providers/rollout-context-provider.js";
 import { ProjectActions } from "./project-actions.js";
 
-const VERSION = "0.4.0";
+const VERSION = "0.4.1";
 const dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path.join(process.env.CODEX_HOME || path.join(homedir(), ".codex"), "context-window-monitor");
 const statePath = path.join(dataDirectory, `launcher-${VERSION}.json`);
 const lockPath = path.join(dataDirectory, `launcher-${VERSION}.lock`);
