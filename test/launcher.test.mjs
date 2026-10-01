@@ -36,18 +36,27 @@ async function fixture(context){
 test("concurrent clicks share one healthy service; a later click reuses it",async context=>{
   const f=await fixture(context);
   // A corrupt saved address must never redirect the launcher outside loopback.
-  await writeFile(path.join(f.state,"launcher-0.4.2.json"),JSON.stringify({version:"0.4.2",pid:123,url:"https://example.invalid/"}));
+  await writeFile(path.join(f.state,"launcher-0.4.3.json"),JSON.stringify({version:"0.4.3",pid:123,url:"https://example.invalid/"}));
   const launches=await Promise.all([f.run("--session","fixture"),f.run("--session","fixture"),f.run("--session","fixture")]);
   assert.equal(new Set(launches.map(value=>value.pid)).size,1);
   assert.equal(new Set(launches.map(value=>value.url)).size,1);
   const warm=await f.run("--session","fixture");assert.equal(warm.pid,launches[0].pid);
+  assert.equal(warm.browserTarget,"codex");
+  const appLink=new URL(warm.launchUrl);
+  assert.equal(appLink.protocol,"codex:");assert.equal(appLink.hostname,"browser");
+  assert.equal(appLink.pathname,"");assert.equal(appLink.searchParams.size,1);
+  assert.equal(appLink.searchParams.get("url"),warm.url);
+  assert.equal(appLink.hash,"");
+  const external=await f.run("--session","fixture","--external-browser");
+  assert.equal(external.browserTarget,"external");assert.equal(external.launchUrl,external.url);
+  assert.equal(external.pid,warm.pid);
   const url=new URL(warm.url);assert.equal(url.hostname,"127.0.0.1");
   assert.equal(url.searchParams.get("session"),"fixture");assert.equal(url.searchParams.has("selection"),false);
   const health=await (await fetch(new URL("health",url))).json();
-  assert.equal(health.pid,warm.pid);assert.equal(health.version,"0.4.2");
+  assert.equal(health.pid,warm.pid);assert.equal(health.version,"0.4.3");
   assert.equal((await fetch(url)).status,200);
   assert.equal((await fetch(new URL("health",url),{headers:{Origin:"https://example.invalid"}})).status,403);
-  const saved=JSON.parse(await readFile(path.join(f.state,"launcher-0.4.2.json"),"utf8"));assert.equal(saved.pid,warm.pid);
+  const saved=JSON.parse(await readFile(path.join(f.state,"launcher-0.4.3.json"),"utf8"));assert.equal(saved.pid,warm.pid);
 });
 
 test("desktop entry selects the most recent session across projects independently of its working directory",async context=>{
@@ -71,6 +80,23 @@ test("Windows desktop helper compiles without showing windows or registering a h
   assert.deepEqual(JSON.parse(stdout),{nodeFound:true,hotkey:"Ctrl+Alt+M",launcherFound:true,compiled:true});
 });
 
+test("Windows browser entry resolves the executable from each install manifest without opening it",{skip:process.platform!=="win32"},async context=>{
+  const directory=await mkdtemp(path.join(tmpdir(),"context-browser-"));
+  context.after(()=>rm(directory,{recursive:true,force:true}));
+  const script=path.resolve("scripts/open-codex-browser.ps1").replaceAll("'","''");
+  for(const name of ["New Codex install","Different drive layout"]){
+    const root=path.join(directory,name);await mkdir(path.join(root,"renamed app"),{recursive:true});
+    const executable=path.join(root,"renamed app","Desktop.exe");await writeFile(executable,"");
+    await writeFile(path.join(root,"AppxManifest.xml"),'<Package xmlns="urn:test"><Applications><Application Executable="runner.exe"/><Application Executable="renamed app/Desktop.exe"><Extensions><Extension><Protocol Name="codex"/></Extension></Extensions></Application></Applications></Package>');
+    const command=`function Get-AppxPackage { param($Name) [PSCustomObject]@{Version='26.999.1.0';InstallLocation='${root.replaceAll("'","''")}'} }; & '${script}' -ResolveOnly`;
+    const {stdout}=await execute("powershell.exe",["-NoProfile","-Command",command],{windowsHide:true,timeout:15000});
+    assert.deepEqual(JSON.parse(stdout),{method:"desktop-executable",executable});
+  }
+  await writeFile(path.join(directory,"AppxManifest.xml"),'<Package><Application Executable="../escape.exe"><Protocol Name="codex"/></Application></Package>');
+  const invalid=`function Get-AppxPackage { param($Name) [PSCustomObject]@{Version='1.0';InstallLocation='${directory.replaceAll("'","''")}'} }; & '${script}' -ResolveOnly`;
+  await assert.rejects(execute("powershell.exe",["-NoProfile","-Command",invalid],{windowsHide:true,timeout:15000}),/outside its package/u);
+});
+
 test("Windows PowerShell launcher returns from a captured pipeline after cold startup",{skip:process.platform!=="win32"},async context=>{
   const f=await fixture(context);
   const wrapper=path.resolve("scripts/open-dashboard.ps1").replaceAll("'","''");
@@ -89,7 +115,7 @@ test("project selection respects directory boundaries, recovers an old lock, and
   await f.log("11111111-1111-4111-8111-111111111111",project,5000);
   await f.log("22222222-2222-4222-8222-222222222222",path.join(project,"nested"),3000);
   await f.log("33333333-3333-4333-8333-333333333333",`${project}-sibling`,1000);
-  const lock=path.join(f.state,"launcher-0.4.2.lock");await writeFile(lock,"");
+  const lock=path.join(f.state,"launcher-0.4.3.lock");await writeFile(lock,"");
   const old=new Date(Date.now()-60000);await utimes(lock,old,old);
   const selected=await f.run("--cwd",project);
   assert.equal(selected.sessionId,"22222222-2222-4222-8222-222222222222");

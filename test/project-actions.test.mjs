@@ -155,7 +155,7 @@ test("MCP startup creates actions without any tool calls and keeps following pro
   };
   try {
     await until(() => stat(config(first)).then(() => true, () => false));
-    const state = JSON.parse(await readFile(path.join(f.dataDirectory, "launcher-0.4.2.json"), "utf8"));
+    const state = JSON.parse(await readFile(path.join(f.dataDirectory, "launcher-0.4.3.json"), "utf8"));
     const health = () => fetch(state.url + "health").then(r => r.json());
     await until(async () => (await health()).projectIntegration.configured === 1);
     assert.equal(output, "", "auto initialization must not emit unsolicited MCP stdout");

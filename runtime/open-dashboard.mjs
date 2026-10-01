@@ -339,7 +339,7 @@ async function startDashboard(monitor, provider, projectStatus) {
     }
     const relative = url.pathname.slice(prefix.length);
     if (req.method === "GET" && relative === "health") {
-      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.2", pid: process.pid, projectIntegration: projectStatus?.() }));
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.3", pid: process.pid, projectIntegration: projectStatus?.() }));
       return;
     }
     if (req.method === "GET" && relative === "") {
@@ -2065,14 +2065,14 @@ ${END}
         } catch (error) {
           if (error.code === "ESRCH") alive = false;
         }
-        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.2", void 0, { numeric: true }) >= 0) {
+        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.3", void 0, { numeric: true }) >= 0) {
           this.status.enabled = false;
           this.status.source = "managed-by-running-service";
           this.stop();
           return this.status;
         }
       }
-      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.2" }));
+      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.3" }));
       const ledgerPath = path4.join(this.dataDirectory, "project-actions.json");
       const ledger = await fs4.readFile(ledgerPath, "utf8").then((text2) => JSON.parse(text2)).catch((error) => {
         if (error.code === "ENOENT") return { files: [] };
@@ -2230,7 +2230,7 @@ async function ensureDesktopEntry(directory, pluginRoot, version) {
 }
 
 // src/open-dashboard.ts
-var VERSION = "0.4.2";
+var VERSION = "0.4.3";
 var dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path6.join(process.env.CODEX_HOME || path6.join(homedir4(), ".codex"), "context-window-monitor");
 var statePath = path6.join(dataDirectory, `launcher-${VERSION}.json`);
 var lockPath = path6.join(dataDirectory, `launcher-${VERSION}.lock`);
@@ -2320,10 +2320,10 @@ async function serve() {
     });
   });
 }
-async function openBrowser(url) {
+async function openLaunchUrl(url) {
   const command = process.platform === "win32" ? path6.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.platform === "darwin" ? "open" : "xdg-open";
   const openCommand = `Start-Process -FilePath '${url.replaceAll("'", "''")}' -ErrorAction Stop`;
-  const args = process.platform === "win32" ? ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(openCommand, "utf16le").toString("base64")] : [url];
+  const args = process.platform === "win32" ? url.startsWith("codex://browser?") ? ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path6.resolve(path6.dirname(fileURLToPath(import.meta.url)), "../scripts/open-codex-browser.ps1"), "-LaunchUrl", url] : ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(openCommand, "utf16le").toString("base64")] : [url];
   const child = spawn2(command, args, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore" });
   await new Promise((resolve, reject) => {
     child.once("error", reject);
@@ -2373,8 +2373,10 @@ async function main() {
   const url = new URL(server.url);
   url.searchParams.set("session", session || "no-session-for-project");
   if (!requested) url.searchParams.set("selection", args.includes("--recent") ? "recent-session" : session ? "recent-project" : "no-project-session");
-  if (!args.includes("--no-open")) await openBrowser(url.href);
-  console.log(JSON.stringify({ url: url.href, pid: server.pid, sessionId: session, startupMs: Math.round(performance.now() - started) }));
+  const browserTarget = args.includes("--external-browser") ? "external" : "codex";
+  const launchUrl = browserTarget === "codex" ? `codex://browser?${new URLSearchParams({ url: url.href })}` : url.href;
+  if (!args.includes("--no-open")) await openLaunchUrl(launchUrl);
+  console.log(JSON.stringify({ url: url.href, launchUrl, browserTarget, pid: server.pid, sessionId: session, startupMs: Math.round(performance.now() - started) }));
 }
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));

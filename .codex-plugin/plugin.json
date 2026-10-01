@@ -1,6 +1,6 @@
 {
   "name": "context-window-monitor",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Inspect the exact Codex context-window snapshot reported by the active session.",
   "author": {
     "name": "Local developer"

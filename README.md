@@ -1,12 +1,14 @@
 # Codex 上下文监控插件
 
-`context-window-monitor` **0.4.2**，用于 Codex Desktop / CLI。黑色上下文仪表盘，自动适配 Codex 中注册的所有本地项目。它是 Codex 插件，不依赖 DeepSeek Harness。
+`context-window-monitor` **0.4.3**，用于 Codex Desktop / CLI。黑色上下文仪表盘，自动适配 Codex 中注册的所有本地项目。它是 Codex 插件，不依赖 DeepSeek Harness。
 
-[下载 v0.4.2](https://github.com/xlxs123/context-window-monitor/releases/tag/v0.4.2) · [MIT 许可证](LICENSE) · [验证记录](docs/verification.md)
+[下载 v0.4.3](https://github.com/xlxs123/context-window-monitor/releases/tag/v0.4.3) · [MIT 许可证](LICENSE) · [验证记录](docs/verification.md)
 
 ## 一键打开
 
-Windows 安装后，按 **Ctrl+Alt+M**，或左键点击**任务栏右下角、时钟附近的上下文监控托盘图标**，即可在默认浏览器打开仪表盘。图标是绿色圆环和白色柱形图，悬停显示「上下文监控」和实际注册的快捷键；被 Windows 折叠时，在通知区域的 `^` 中查找。无需聊天指令，不调用模型，不逐个项目配置。
+Windows 安装后，按 **Ctrl+Alt+M**，或左键点击**任务栏右下角、时钟附近的上下文监控托盘图标**，即可在 **Codex 内置浏览器**打开仪表盘。图标是绿色圆环和白色柱形图，悬停显示「上下文监控」和实际注册的快捷键；被 Windows 折叠时，在通知区域的 `^` 中查找。无需聊天指令，不调用模型，不逐个项目配置。
+
+这是所有安装用户共享的默认行为，不是本机特定修改。启动器使用 `codex://` 浏览器协议，不绑定用户名、盘符、Desktop 安装目录或版本号。Windows Store 安装会自动读取当前安装包的 manifest，定位实际程序并传入链接，兼容系统协议激活丢失参数的情况；其他安装使用注册的协议入口。服务从各自的 `CODEX_HOME` 获取数据，并自动跟随注册项目。不同电脑各自创建本机服务和访问地址。
 
 这个入口是插件自己的 Windows 托盘按钮，**不是 Codex 聊天菜单或摘要面板里的按钮**。旧版只验证了项目操作配置和启动命令，未验证按钮显示；用户截图确认当前页面未显示项目操作，因此 0.4.2 不再依赖它作为主入口。
 
@@ -61,7 +63,7 @@ node runtime/dashboard.mjs <session-id>
 
 插件包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/`、`skills/` 和已打包的 MCP 服务。
 
-默认插件选择器为 `context-window-monitor@personal`。双击 `Install.cmd` 可首次安装或更新到 **0.4.2**，旧版本保留备份。
+默认插件选择器为 `context-window-monitor@personal`。双击 `Install.cmd` 可首次安装或更新到 **0.4.3**，旧版本保留备份。
 
 也可在 PowerShell 执行下面一行。脚本检查环境，备份旧版，注册市场、更新缓存、验证版本并启动自动接入；兼容 Windows PowerShell 5.1：
 
@@ -77,7 +79,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\context-window-m
 
 配置完成后即可使用托盘或快捷键。如果需要让模型分析数据，也保留了 **“打开上下文监控”** 指令：新聊天加载更新后的技能后，可调用 `show_context_monitor`，并在支持 `open_in_codex` 的宿主中打开返回的本地仪表盘地址。支持 MCP Apps 的宿主也能渲染同一界面。
 
-Windows 主入口为插件托盘和快捷键；项目操作为可选入口，不修改 Codex 程序文件。macOS / Linux 没有这项 Windows 托盘功能，可使用本地启动器或宿主支持的项目操作。操作默认打开系统浏览器；聊天工具也能在支持的宿主中打开 Codex 浏览器面板。CLI 可返回文本摘要和本地地址。自动接入不依赖 hooks 的信任状态；hooks 如需启用，请通过 Codex 的 `/hooks` 审核。
+Windows 主入口为插件托盘和快捷键；项目操作为可选入口，不修改 Codex 程序文件。macOS / Linux 没有这项 Windows 托盘功能，可使用本地启动器或宿主支持的项目操作。启动器默认通过 `codex://browser?url=<完整地址的编码值>` 打开当前聊天的内置浏览器，不创建聊天、不发送指令。该浏览器路由已核对 Codex Desktop 26.928 的实际解析器和处理代码；官方公开的深链列表尚未列出它，其他版本需实际验证。只有 CLI、未安装 Desktop 或版本不支持时，可主动使用 `--external-browser`（PowerShell 包装器为 `-ExternalBrowser`）打开系统浏览器，启动器不会自动切换。CLI 也可用 `--no-open` 仅返回地址。自动接入不依赖 hooks 的信任状态；hooks 如需启用，请通过 Codex 的 `/hooks` 审核。
 
 ## 数据口径与边界
 
@@ -130,7 +132,7 @@ npm run check
 npm run preview
 ```
 
-重新打包：完成 `npm run check` 后运行 `python scripts/package.py`。产物为 `dist/context-window-monitor-0.4.2.zip` 及 SHA-256 校验文件，包含源码和编译好的运行文件。第三方许可证保留在 `docs/THIRD-PARTY-NOTICES.md`。
+重新打包：完成 `npm run check` 后运行 `python scripts/package.py`。产物为 `dist/context-window-monitor-0.4.3.zip` 及 SHA-256 校验文件，包含源码和编译好的运行文件。第三方许可证保留在 `docs/THIRD-PARTY-NOTICES.md`。
 
 预览为 `http://127.0.0.1:4174`，明确标为**演示数据**，不会读取真实会话原文。`npm run dashboard` 才读取本机真实 Codex 数据。
 

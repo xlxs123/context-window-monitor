@@ -1,5 +1,14 @@
 # 验证记录
 
+## 0.4.3 Codex 内置浏览器入口（2026-10-01）
+
+- `npm run check`：TypeScript、ESLint、构建及全部 **28 项测试通过**。启动器集成测试验证默认目标为 `codex`、深链没有多余路径或参数、完整会话 URL 编码后保持一致；外部浏览器必须显式选择，仍共享同一服务。
+- Windows 入口根据安装包 manifest 中注册 `codex` 的 Application 定位可执行文件，不硬编码包版本、用户名、盘符、程序名。两个不同目录和重命名程序的安装布局验证通过；拒绝 manifest 中逃出安装包的路径。`-ResolveOnly` 验证不启动应用。
+- 实际验证发现 Windows Store 的系统协议激活未传递浏览器跳转；直接将同一深链传给 Desktop 程序后，Codex 日志记录内置浏览器 webview 挂载和仪表盘 URL 的 `dom-ready`。没有使用 Computer Use，也没有模拟点击或键盘操作。
+- 最终安装的 `open-dashboard.mjs --recent` 实测：默认 `browserTarget=codex`，1331 ms 返回；Codex 日志确认同一服务完整 URL 的内置浏览器 `dom-ready`。服务版本 0.4.3、9 个注册项目全部接入、0 错误；托盘及 Ctrl+Alt+Shift+M 已注册，原组合被占用时没有抢占。
+- 只读检查本机 Codex Desktop 26.928 的真实解析和处理代码：`codex://browser?url=...` 解析为 `browser`，处理器发送 `toggle-browser-panel`，无需新建聊天或调用模型。将实际解析函数隔离执行，含 session 和 selection 的本机仪表盘链接通过，错误的尾部斜线被拒绝。
+- 浏览器深链尚未出现在官方公开深链列表中，因此这项兼容验证针对 Desktop 26.928；其他版本不能仅凭文档推定支持。CLI 或不支持此路由的 Desktop 可主动选择 `--external-browser`，不会自动打开外部浏览器。
+
 ## 0.4.2 Windows 可见入口（2026-09-30）
 
 - TypeScript、ESLint、构建及全部 **27 项测试通过**。新增跨项目最近会话选择和 Windows 托盘辅助程序编译验证；命令测试不打开浏览器。

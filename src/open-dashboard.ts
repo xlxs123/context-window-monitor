@@ -10,7 +10,7 @@ import { RolloutContextProvider } from "./providers/rollout-context-provider.js"
 import { ProjectActions } from "./project-actions.js";
 import { ensureDesktopEntry, stopDesktopEntry } from "./desktop-entry.js";
 
-const VERSION = "0.4.2";
+const VERSION = "0.4.3";
 const dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path.join(process.env.CODEX_HOME || path.join(homedir(), ".codex"), "context-window-monitor");
 const statePath = path.join(dataDirectory, `launcher-${VERSION}.json`);
 const lockPath = path.join(dataDirectory, `launcher-${VERSION}.lock`);
@@ -102,11 +102,13 @@ async function serve(): Promise<void> {
   });
 }
 
-async function openBrowser(url: string): Promise<void> {
-  // No shell interpolation; the URL originates from a verified loopback service.
+async function openLaunchUrl(url: string): Promise<void> {
+  // The launch URL is either a Codex protocol link or our verified loopback URL.
   const command = process.platform === "win32" ? path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.platform === "darwin" ? "open" : "xdg-open";
   const openCommand = `Start-Process -FilePath '${url.replaceAll("'", "''")}' -ErrorAction Stop`;
-  const args = process.platform === "win32" ? ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(openCommand, "utf16le").toString("base64")] : [url];
+  const args = process.platform === "win32" ? url.startsWith("codex://browser?")
+    ? ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../scripts/open-codex-browser.ps1"), "-LaunchUrl", url]
+    : ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(openCommand, "utf16le").toString("base64")] : [url];
   const child = spawn(command, args, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore" });
   await new Promise<void>((resolve, reject) => {
     child.once("error", reject);
@@ -151,8 +153,14 @@ async function main(): Promise<void> {
   const url = new URL(server.url);
   url.searchParams.set("session", session || "no-session-for-project");
   if (!requested) url.searchParams.set("selection", args.includes("--recent") ? "recent-session" : session ? "recent-project" : "no-project-session");
-  if (!args.includes("--no-open")) await openBrowser(url.href);
-  console.log(JSON.stringify({ url: url.href, pid: server.pid, sessionId: session, startupMs: Math.round(performance.now() - started) }));
+  const browserTarget = args.includes("--external-browser") ? "external" : "codex";
+  // Codex Desktop's browser route requires an empty pathname (no trailing
+  // slash) and one encoded `url` parameter. It opens the panel in the selected
+  // chat without creating a new chat or sending a model request.
+  const launchUrl = browserTarget === "codex"
+    ? `codex://browser?${new URLSearchParams({ url: url.href })}` : url.href;
+  if (!args.includes("--no-open")) await openLaunchUrl(launchUrl);
+  console.log(JSON.stringify({ url: url.href, launchUrl, browserTarget, pid: server.pid, sessionId: session, startupMs: Math.round(performance.now() - started) }));
 }
 
 main().catch(error => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
