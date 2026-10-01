@@ -62,7 +62,7 @@ export class ContextDetailsPanel {
     const initial=window.__CONTEXT_MONITOR_PREVIEW__??window.openai?.toolOutput;
     if(isDashboard(initial))this.update(initial);else this.render();
     if(this.local){void this.refresh();void this.loadSessions();}
-    else if(!this.preview&&window.parent!==window){void this.request("ui/initialize",{appInfo:{name:"context-window-monitor",version:"0.4.3"},appCapabilities:{availableDisplayModes:["inline","fullscreen"]},protocolVersion:"2026-01-26"}).then(()=>{this.notify("ui/notifications/initialized",{});void this.loadSessions();}).catch(()=>{if(window.openai?.callTool)void this.refresh();});}
+    else if(!this.preview&&window.parent!==window){void this.request("ui/initialize",{appInfo:{name:"context-window-monitor",version:"0.4.4"},appCapabilities:{availableDisplayModes:["inline","fullscreen"]},protocolVersion:"2026-01-26"}).then(()=>{this.notify("ui/notifications/initialized",{});void this.loadSessions();}).catch(()=>{if(window.openai?.callTool)void this.refresh();});}
     this.timer=window.setInterval(()=>{if(!this.paused&&!document.hidden&&!this.preview)void this.refresh();},5000);
   }
   update(d:ContextDashboard):void{this.dashboard=d;this.sessionId=d.usage.sessionId??this.sessionId;this.render();}

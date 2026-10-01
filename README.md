@@ -1,12 +1,12 @@
 # Codex 上下文监控插件
 
-`context-window-monitor` **0.4.3**，用于 Codex Desktop / CLI。黑色上下文仪表盘，自动适配 Codex 中注册的所有本地项目。它是 Codex 插件，不依赖 DeepSeek Harness。
+`context-window-monitor` **0.4.4**，用于 Codex Desktop / CLI。黑色上下文仪表盘，自动适配 Codex 中注册的所有本地项目。它是 Codex 插件，不依赖 DeepSeek Harness。
 
-[下载 v0.4.3](https://github.com/xlxs123/context-window-monitor/releases/tag/v0.4.3) · [MIT 许可证](LICENSE) · [验证记录](docs/verification.md)
+[下载 v0.4.4](https://github.com/xlxs123/context-window-monitor/releases/tag/v0.4.4) · [MIT 许可证](LICENSE) · [验证记录](docs/verification.md)
 
 ## 一键打开
 
-Windows 安装后，按 **Ctrl+Alt+M**，或左键点击**任务栏右下角、时钟附近的上下文监控托盘图标**，即可在 **Codex 内置浏览器**打开仪表盘。图标是绿色圆环和白色柱形图，悬停显示「上下文监控」和实际注册的快捷键；被 Windows 折叠时，在通知区域的 `^` 中查找。无需聊天指令，不调用模型，不逐个项目配置。
+Windows 安装后，按 **Ctrl+Alt+M**（被占用时尝试 **Ctrl+Alt+Shift+M**），或左键点击**任务栏右下角、时钟附近的上下文监控托盘图标**，即可在 **Codex 内置浏览器**打开仪表盘。图标是绿色圆环和白色柱形图，悬停显示「上下文监控」和实际注册的快捷键；被 Windows 折叠时，在通知区域的 `^` 中查找。无需聊天指令，不调用模型，不逐个项目配置。
 
 这是所有安装用户共享的默认行为，不是本机特定修改。启动器使用 `codex://` 浏览器协议，不绑定用户名、盘符、Desktop 安装目录或版本号。Windows Store 安装会自动读取当前安装包的 manifest，定位实际程序并传入链接，兼容系统协议激活丢失参数的情况；其他安装使用注册的协议入口。服务从各自的 `CODEX_HOME` 获取数据，并自动跟随注册项目。不同电脑各自创建本机服务和访问地址。
 
@@ -18,7 +18,13 @@ Windows 首次使用：
 2. 下载 Release 的 ZIP，完整解压，双击 **`Install.cmd`**。
 3. 安装器会检查托盘启动和快捷键注册。安装后直接按 **Ctrl+Alt+M**；被占用时自动尝试 **Ctrl+Alt+Shift+M**。安装器和图标悬停会显示实际组合；都被占用时仍可点击托盘图标。
 
-安装器会注册个人插件市场、安装启用插件，并立即启动托盘和自动接入。通过其他方式安装插件时，自动接入在 Codex 加载插件的 MCP 服务后启动；宿主尚未加载时需要重新打开 Codex。打开监控不要求 PATH 中存在 `codex`，不需要 Python。托盘不读取或控制其他应用窗口，不占用前台；退出托盘后，下次插件加载会重新启动。设置 `CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY=1` 可关闭托盘自动启动。
+安装器会注册个人插件市场、安装启用插件，并立即启动托盘和自动接入。通过其他方式安装插件时，自动接入和登录恢复在 Codex 首次加载插件的 MCP 服务后注册；宿主尚未加载时需要重新打开 Codex。打开监控不要求 PATH 中存在 `codex`，不需要 Python。托盘不读取或控制其他应用窗口，不占用前台；退出托盘后，下次插件加载会重新启动。设置 `CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY=1` 可关闭托盘自动启动。
+
+**Windows 登录恢复**：0.4.4 起，安装或首次 MCP 加载会创建当前用户的 `CodexContextMonitor` 启动项，重新登录后自动恢复托盘和快捷键，不需要先发送聊天指令。启动前动态查询 Codex 的实际安装和启用状态；禁用或卸载后，下次登录不启动监控。现有运行中的服务可通过托盘菜单退出，或用下方停止命令关闭。每次登录重新定位当前 CLI 和插件版本，避免 Store 升级、缓存更新后路径失效。用户主动停用 Windows 启动项时不会重新开启它。
+
+启动项位于 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`，无需管理员权限。稳定脚本和参数位于 `%LOCALAPPDATA%\OpenAI\CodexContextMonitor`；参数通过 JSON 保存，短启动命令遵守 [Windows Run 的长度限制](https://learn.microsoft.com/windows/win32/setupapi/run-and-runonce-registry-keys)。普通诊断写入 `CODEX_HOME/context-window-monitor/startup-last-run.json`，参数损坏时写入稳定脚本旁边。同名启动项或脚本的用户修改会保留并报错。
+
+仅关闭登录恢复可在安装和加载插件前设置 `CONTEXT_MONITOR_DISABLE_LOGIN_STARTUP=1`。移除已注册启动项可执行 `powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\context-window-monitor\scripts\configure-startup.ps1" -Mode Remove`；脚本只移除它自己创建且未被修改的启动项。保持上述环境变量可避免后续加载重新注册。登录恢复不承担运行中崩溃后的持续重启。
 
 自动接入每 3 秒读取 Codex 当前项目注册表。已有项目、新增项目和路径变化都会处理；移除项目后清理插件自己添加且未被用户编辑的入口。不扫描磁盘、不使用已删除项目的历史列表。仅支持本机可写的项目目录；ChatGPT 云端项目不属于此入口的范围。
 
@@ -63,7 +69,7 @@ node runtime/dashboard.mjs <session-id>
 
 插件包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/`、`skills/` 和已打包的 MCP 服务。
 
-默认插件选择器为 `context-window-monitor@personal`。双击 `Install.cmd` 可首次安装或更新到 **0.4.3**，旧版本保留备份。
+默认插件选择器为 `context-window-monitor@personal`。双击 `Install.cmd` 可首次安装或更新到 **0.4.4**，旧版本保留备份。
 
 也可在 PowerShell 执行下面一行。脚本检查环境，备份旧版，注册市场、更新缓存、验证版本并启动自动接入；兼容 Windows PowerShell 5.1：
 
@@ -132,7 +138,7 @@ npm run check
 npm run preview
 ```
 
-重新打包：完成 `npm run check` 后运行 `python scripts/package.py`。产物为 `dist/context-window-monitor-0.4.3.zip` 及 SHA-256 校验文件，包含源码和编译好的运行文件。第三方许可证保留在 `docs/THIRD-PARTY-NOTICES.md`。
+重新打包：完成 `npm run check` 后运行 `python scripts/package.py`。产物为 `dist/context-window-monitor-0.4.4.zip` 及 SHA-256 校验文件，包含源码和编译好的运行文件。第三方许可证保留在 `docs/THIRD-PARTY-NOTICES.md`。
 
 预览为 `http://127.0.0.1:4174`，明确标为**演示数据**，不会读取真实会话原文。`npm run dashboard` 才读取本机真实 Codex 数据。
 

@@ -9,8 +9,9 @@ import { startDashboard } from "./dashboard-server.js";
 import { RolloutContextProvider } from "./providers/rollout-context-provider.js";
 import { ProjectActions } from "./project-actions.js";
 import { ensureDesktopEntry, stopDesktopEntry } from "./desktop-entry.js";
+import { ensureStartupEntry } from "./startup-entry.js";
 
-const VERSION = "0.4.3";
+const VERSION = "0.4.4";
 const dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path.join(process.env.CODEX_HOME || path.join(homedir(), ".codex"), "context-window-monitor");
 const statePath = path.join(dataDirectory, `launcher-${VERSION}.json`);
 const lockPath = path.join(dataDirectory, `launcher-${VERSION}.lock`);
@@ -124,7 +125,10 @@ async function main(): Promise<void> {
     let desktopEntry;
     try { desktopEntry = await ensureDesktopEntry(dataDirectory, path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."), VERSION); }
     catch (error) { process.stderr.write(`${error instanceof Error ? error.message : error}\n`); }
-    console.log(JSON.stringify({ url: server.url, pid: server.pid, desktopEntry })); return;
+    let loginStartup;
+    try { loginStartup = await ensureStartupEntry(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")); }
+    catch (error) { process.stderr.write(`${error instanceof Error ? error.message : error}\n`); }
+    console.log(JSON.stringify({ url: server.url, pid: server.pid, desktopEntry, loginStartup })); return;
   }
   if (args.includes("--stop")) {
     await stopDesktopEntry(dataDirectory);

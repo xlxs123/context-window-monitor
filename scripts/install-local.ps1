@@ -132,6 +132,8 @@ try {
     $startup = ($startupText -join "`n") | ConvertFrom-Json
     if ($env:CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY -ne '1') {
         if (-not $startup.desktopEntry.visible) { throw 'Plugin installed, but the tray entry did not start. The dashboard service is running.' }
+        if ($env:CONTEXT_MONITOR_DISABLE_LOGIN_STARTUP -ne '1' -and -not $startup.loginStartup.registered) { throw 'Plugin installed, but login startup registration failed.' }
+        Write-Host 'Login recovery is ready. The tray and shortcut will restart after Windows sign-in while the plugin is installed and enabled.'
         Write-Host 'Click Context Monitor in the Windows notification area (near the clock). No chat command is needed.'
         if ($startup.desktopEntry.hotkeyRegistered) { Write-Host "Shortcut is ready: $($startup.desktopEntry.hotkey)." }
         else { Write-Warning 'The shortcuts are already in use or unavailable. The tray button remains available.' }

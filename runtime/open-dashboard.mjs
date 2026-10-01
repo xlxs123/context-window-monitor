@@ -1,8 +1,8 @@
 // src/open-dashboard.ts
 import { spawn as spawn2 } from "node:child_process";
 import { mkdir as mkdir2, open, readFile as readFile3, rename, stat, unlink, writeFile as writeFile2 } from "node:fs/promises";
-import { homedir as homedir4 } from "node:os";
-import path6 from "node:path";
+import { homedir as homedir5 } from "node:os";
+import path7 from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay2 } from "node:timers/promises";
 
@@ -339,7 +339,7 @@ async function startDashboard(monitor, provider, projectStatus) {
     }
     const relative = url.pathname.slice(prefix.length);
     if (req.method === "GET" && relative === "health") {
-      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.3", pid: process.pid, projectIntegration: projectStatus?.() }));
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.4", pid: process.pid, projectIntegration: projectStatus?.() }));
       return;
     }
     if (req.method === "GET" && relative === "") {
@@ -2065,14 +2065,14 @@ ${END}
         } catch (error) {
           if (error.code === "ESRCH") alive = false;
         }
-        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.3", void 0, { numeric: true }) >= 0) {
+        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.4", void 0, { numeric: true }) >= 0) {
           this.status.enabled = false;
           this.status.source = "managed-by-running-service";
           this.stop();
           return this.status;
         }
       }
-      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.3" }));
+      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.4" }));
       const ledgerPath = path4.join(this.dataDirectory, "project-actions.json");
       const ledger = await fs4.readFile(ledgerPath, "utf8").then((text2) => JSON.parse(text2)).catch((error) => {
         if (error.code === "ENOENT") return { files: [] };
@@ -2229,11 +2229,34 @@ async function ensureDesktopEntry(directory, pluginRoot, version) {
   throw new Error("Tray startup timed out. The dashboard service is still available.");
 }
 
+// src/startup-entry.ts
+import { execFile } from "node:child_process";
+import { homedir as homedir4 } from "node:os";
+import path6 from "node:path";
+import { promisify } from "node:util";
+async function ensureStartupEntry(pluginRoot) {
+  if (process.platform !== "win32" || process.env.CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY === "1" || process.env.CONTEXT_MONITOR_DISABLE_LOGIN_STARTUP === "1") return null;
+  const powershell = path6.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const { stdout } = await promisify(execFile)(powershell, [
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    path6.join(pluginRoot, "scripts", "configure-startup.ps1"),
+    "-NodePath",
+    process.execPath,
+    "-CodexHome",
+    process.env.CODEX_HOME || path6.join(homedir4(), ".codex")
+  ], { windowsHide: true, timeout: 15e3 });
+  return JSON.parse(stdout);
+}
+
 // src/open-dashboard.ts
-var VERSION = "0.4.3";
-var dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path6.join(process.env.CODEX_HOME || path6.join(homedir4(), ".codex"), "context-window-monitor");
-var statePath = path6.join(dataDirectory, `launcher-${VERSION}.json`);
-var lockPath = path6.join(dataDirectory, `launcher-${VERSION}.lock`);
+var VERSION = "0.4.4";
+var dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path7.join(process.env.CODEX_HOME || path7.join(homedir5(), ".codex"), "context-window-monitor");
+var statePath = path7.join(dataDirectory, `launcher-${VERSION}.json`);
+var lockPath = path7.join(dataDirectory, `launcher-${VERSION}.lock`);
 function localUrl(value) {
   if (typeof value !== "string") return false;
   try {
@@ -2277,7 +2300,7 @@ async function ensureServer() {
       if (recheck) return recheck;
       const launcher = fileURLToPath(import.meta.url);
       const quote = (value) => `'${value.replaceAll("'", "''")}'`;
-      const command = process.platform === "win32" ? path6.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.execPath;
+      const command = process.platform === "win32" ? path7.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.execPath;
       const windowsCommand = `Start-Process -FilePath ${quote(process.execPath)} -ArgumentList ${quote(`"${launcher}" --serve`)} -WindowStyle Hidden -ErrorAction Stop`;
       const arguments_ = process.platform === "win32" ? ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(windowsCommand, "utf16le").toString("base64")] : [launcher, "--serve"];
       const child = spawn2(command, arguments_, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore", env: process.env });
@@ -2303,7 +2326,7 @@ async function ensureServer() {
 }
 async function serve() {
   const provider = new RolloutContextProvider();
-  const actions = new ProjectActions({ pluginRoot: path6.resolve(path6.dirname(fileURLToPath(import.meta.url)), ".."), dataDirectory });
+  const actions = new ProjectActions({ pluginRoot: path7.resolve(path7.dirname(fileURLToPath(import.meta.url)), ".."), dataDirectory });
   if (process.env.CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS !== "1") actions.start();
   else actions.status.enabled = false;
   const server = await startDashboard(new ContextMonitorService(provider), provider, () => actions.status);
@@ -2321,9 +2344,9 @@ async function serve() {
   });
 }
 async function openLaunchUrl(url) {
-  const command = process.platform === "win32" ? path6.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.platform === "darwin" ? "open" : "xdg-open";
+  const command = process.platform === "win32" ? path7.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.platform === "darwin" ? "open" : "xdg-open";
   const openCommand = `Start-Process -FilePath '${url.replaceAll("'", "''")}' -ErrorAction Stop`;
-  const args = process.platform === "win32" ? url.startsWith("codex://browser?") ? ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path6.resolve(path6.dirname(fileURLToPath(import.meta.url)), "../scripts/open-codex-browser.ps1"), "-LaunchUrl", url] : ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(openCommand, "utf16le").toString("base64")] : [url];
+  const args = process.platform === "win32" ? url.startsWith("codex://browser?") ? ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path7.resolve(path7.dirname(fileURLToPath(import.meta.url)), "../scripts/open-codex-browser.ps1"), "-LaunchUrl", url] : ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(openCommand, "utf16le").toString("base64")] : [url];
   const child = spawn2(command, args, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore" });
   await new Promise((resolve, reject) => {
     child.once("error", reject);
@@ -2340,12 +2363,19 @@ async function main() {
     const server2 = await ensureServer();
     let desktopEntry;
     try {
-      desktopEntry = await ensureDesktopEntry(dataDirectory, path6.resolve(path6.dirname(fileURLToPath(import.meta.url)), ".."), VERSION);
+      desktopEntry = await ensureDesktopEntry(dataDirectory, path7.resolve(path7.dirname(fileURLToPath(import.meta.url)), ".."), VERSION);
     } catch (error) {
       process.stderr.write(`${error instanceof Error ? error.message : error}
 `);
     }
-    console.log(JSON.stringify({ url: server2.url, pid: server2.pid, desktopEntry }));
+    let loginStartup;
+    try {
+      loginStartup = await ensureStartupEntry(path7.resolve(path7.dirname(fileURLToPath(import.meta.url)), ".."));
+    } catch (error) {
+      process.stderr.write(`${error instanceof Error ? error.message : error}
+`);
+    }
+    console.log(JSON.stringify({ url: server2.url, pid: server2.pid, desktopEntry, loginStartup }));
     return;
   }
   if (args.includes("--stop")) {
