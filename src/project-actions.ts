@@ -135,11 +135,11 @@ export class ProjectActions {
       if (owner && owner.pid !== process.pid && Number.isSafeInteger(owner.pid) && owner.pid > 0) {
         let alive = true;
         try { process.kill(owner.pid, 0); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ESRCH") alive = false; }
-        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.4.4", undefined, { numeric: true }) >= 0) {
+        if (alive && typeof owner.version === "string" && owner.version.localeCompare("0.5.0", undefined, { numeric: true }) >= 0) {
           this.status.enabled = false; this.status.source = "managed-by-running-service"; this.stop(); return this.status;
         }
       }
-      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.4.4" }));
+      if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.5.0" }));
       const ledgerPath = path.join(this.dataDirectory, "project-actions.json");
       const ledger: Ledger = await fs.readFile(ledgerPath, "utf8").then(text => JSON.parse(text)).catch(error => {
         if (error.code === "ENOENT") return { files: [] };

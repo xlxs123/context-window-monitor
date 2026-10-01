@@ -11,7 +11,7 @@ import { ProjectActions } from "./project-actions.js";
 import { ensureDesktopEntry, stopDesktopEntry } from "./desktop-entry.js";
 import { ensureStartupEntry } from "./startup-entry.js";
 
-const VERSION = "0.4.4";
+const VERSION = "0.5.0";
 const dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path.join(process.env.CODEX_HOME || path.join(homedir(), ".codex"), "context-window-monitor");
 const statePath = path.join(dataDirectory, `launcher-${VERSION}.json`);
 const lockPath = path.join(dataDirectory, `launcher-${VERSION}.lock`);

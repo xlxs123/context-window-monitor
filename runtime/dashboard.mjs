@@ -321,6 +321,85 @@ function visibleText(payload) {
   const blocks = Array.isArray(payload.content) ? payload.content : Array.isArray(payload.summary) ? payload.summary : [];
   return blocks.map((v) => text(object(v)?.text) ?? "").filter(Boolean).join("\n");
 }
+var operationKinds = {
+  read: /* @__PURE__ */ new Set(["read", "read_file", "read_text_file", "read_binary_file", "read_multiple_files", "read_document", "read_notebook"]),
+  write: /* @__PURE__ */ new Set(["write", "write_file", "write_text_file", "append_file", "create_file", "edit", "edit_file", "replace_in_file", "delete_file", "remove_file", "move_file", "rename_file", "apply_patch"]),
+  search: /* @__PURE__ */ new Set(["search", "search_file", "search_files", "find_in_file", "find_in_files", "grep", "ripgrep", "rg", "glob"]),
+  image: /* @__PURE__ */ new Set(["view_image", "read_image", "open_image"]),
+  other: /* @__PURE__ */ new Set()
+};
+function toolLeaf(name) {
+  return name.toLowerCase().split(/\.|__/u).at(-1) ?? name;
+}
+function operationKind(name) {
+  const leaf = toolLeaf(name);
+  return ["read", "write", "search", "image"].find((kind) => operationKinds[kind].has(leaf)) ?? "other";
+}
+function filePath(value) {
+  return typeof value === "string" && value.trim().length > 0 && !value.includes("\0") && !/[\r\n]/u.test(value) ? value : null;
+}
+function patchOperations(input) {
+  const lines = input.trim().split(/\r?\n/u);
+  if (lines[0] !== "*** Begin Patch" || lines.at(-1) !== "*** End Patch") return [];
+  const operations = [];
+  let current = null;
+  const finish = () => {
+    if (!current) return;
+    if (current.moveTo) {
+      operations.push({ path: current.path, kind: "write", addedLines: null, removedLines: null });
+      if (current.moveTo !== current.path) operations.push({ path: current.moveTo, kind: "write", addedLines: null, removedLines: null });
+    } else {
+      operations.push({ path: current.path, kind: "write", addedLines: current.added, removedLines: current.action === "Delete" ? null : current.removed });
+    }
+  };
+  for (const line of lines.slice(1, -1)) {
+    const header = /^\*\*\* (Add|Update|Delete) File: (.+)$/u.exec(line);
+    if (header) {
+      const target = filePath(header[2]);
+      if (!target) return [];
+      finish();
+      current = { path: target, action: header[1], added: 0, removed: 0, moveTo: null, hasBody: false };
+      continue;
+    }
+    if (!current) return [];
+    const move = /^\*\*\* Move to: (.+)$/u.exec(line);
+    if (move) {
+      if (current.action !== "Update" || current.moveTo || current.hasBody) return [];
+      current.moveTo = filePath(move[1]);
+      if (!current.moveTo) return [];
+      continue;
+    }
+    if (current.action === "Delete") return [];
+    if (current.action === "Update" && (/^@@(?: |$)/u.test(line) || line === "*** End of File")) {
+      current.hasBody = true;
+      continue;
+    }
+    if (line.startsWith("+")) current.added++;
+    else if (current.action === "Update" && line.startsWith("-")) current.removed++;
+    else if (!(current.action === "Update" && line.startsWith(" "))) return [];
+    current.hasBody = true;
+  }
+  finish();
+  return operations;
+}
+function fileOperations(payload) {
+  const name = text(payload.name) ?? "";
+  const input = payload.arguments ?? payload.input;
+  if (toolLeaf(name) === "apply_patch" && typeof input === "string") {
+    const patch = patchOperations(input);
+    if (patch.length > 0) return patch;
+  }
+  let args = object(input);
+  if (typeof input === "string") {
+    try {
+      args = object(JSON.parse(input));
+    } catch {
+      return [];
+    }
+  }
+  const target = filePath(args?.path) ?? filePath(args?.file_path) ?? filePath(args?.filename);
+  return target ? [{ path: target, kind: operationKind(name), addedLines: null, removedLines: null }] : [];
+}
 function activityItem(root, id, timestamp) {
   const payload = object(root.payload);
   if (!payload) return null;
@@ -334,13 +413,8 @@ function activityItem(root, id, timestamp) {
   else if (["function_call_output", "custom_tool_call_output"].includes(type)) category = "tool_result";
   else if (root.type === "compacted" || ["compaction", "context_compaction"].includes(type)) category = "compaction";
   const body = visibleText(payload);
-  let file = null;
-  if (category === "tool_call") try {
-    const args = object(JSON.parse(text(payload.arguments) ?? text(payload.input) ?? "null"));
-    file = text(args?.path) ?? text(args?.file_path) ?? null;
-  } catch {
-  }
-  return { id, timestamp, category, type, role, name: text(payload.name) ?? role ?? type, callId: text(payload.call_id), messageId: text(payload.id), characters: body.length, hash: digest(body), file, tokens: null };
+  const operations = category === "tool_call" ? fileOperations(payload) : [];
+  return { id, timestamp, category, type, role, name: text(payload.name) ?? role ?? type, callId: text(payload.call_id), messageId: text(payload.id), characters: body.length, hash: digest(body), file: operations[0]?.path ?? null, ...operations.length ? { fileOperations: operations } : {}, tokens: null };
 }
 function summarizeActivity(items, truncated, parentSessionId, agentName) {
   const calls = new Map(items.filter((i) => i.category === "tool_call" && i.callId).map((i) => [i.callId, i.name]));
@@ -360,11 +434,28 @@ function summarizeActivity(items, truncated, parentSessionId, agentName) {
       }
       tools.set(i.name, t);
     }
-    if (i.file) {
-      const f = files.get(i.file) ?? { path: i.file, calls: 0, characters: 0 };
-      f.calls++;
-      f.characters += i.characters;
-      files.set(i.file, f);
+    if (i.category === "tool_call") {
+      const operations = i.fileOperations ?? (i.file ? [{ path: i.file, kind: operationKind(i.name), addedLines: null, removedLines: null }] : []);
+      const byPath = /* @__PURE__ */ new Map();
+      for (const op of operations) byPath.set(op.path, [...byPath.get(op.path) ?? [], op]);
+      for (const [target, ops] of byPath) {
+        const f = files.get(target) ?? { path: target, calls: 0, characters: 0, readCalls: 0, writeCalls: 0, searchCalls: 0, imageCalls: 0, addedLines: 0, removedLines: 0, lastAt: null, itemIds: [] };
+        f.calls++;
+        f.characters += i.characters;
+        const kinds = new Set(ops.map((op) => op.kind));
+        if (kinds.has("read")) f.readCalls = (f.readCalls ?? 0) + 1;
+        if (kinds.has("write")) f.writeCalls = (f.writeCalls ?? 0) + 1;
+        if (kinds.has("search")) f.searchCalls = (f.searchCalls ?? 0) + 1;
+        if (kinds.has("image")) f.imageCalls = (f.imageCalls ?? 0) + 1;
+        for (const op of ops) if (op.kind === "write" || op.kind === "other") {
+          f.addedLines = f.addedLines === null || op.addedLines === null ? null : (f.addedLines ?? 0) + op.addedLines;
+          f.removedLines = f.removedLines === null || op.removedLines === null ? null : (f.removedLines ?? 0) + op.removedLines;
+        }
+        if (Number.isFinite(Date.parse(i.timestamp)) && (!f.lastAt || Date.parse(i.timestamp) > Date.parse(f.lastAt))) f.lastAt = i.timestamp;
+        f.itemIds ??= [];
+        if (!f.itemIds.includes(i.id)) f.itemIds.push(i.id);
+        files.set(target, f);
+      }
     }
     if (i.characters >= 256) hashes.set(i.hash, [...hashes.get(i.hash) ?? [], i]);
   }
@@ -580,9 +671,9 @@ function resolveDataDirectory() {
 function sessionKey(sessionId) {
   return createHash2("sha256").update(sessionId).digest("hex").slice(0, 32);
 }
-async function readJson(filePath) {
+async function readJson(filePath2) {
   try {
-    return JSON.parse(await fs.readFile(filePath, "utf8"));
+    return JSON.parse(await fs.readFile(filePath2, "utf8"));
   } catch {
     return null;
   }
@@ -708,17 +799,17 @@ function codexSessionsRoot() {
   const codexDirectory = usableEnvironmentPath2(process.env.CODEX_HOME) ?? path2.join(homedir2(), ".codex");
   return path2.join(codexDirectory, "sessions");
 }
-function sessionIdFromFilename(filePath) {
-  const match = path2.basename(filePath).match(
+function sessionIdFromFilename(filePath2) {
+  const match = path2.basename(filePath2).match(
     /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/iu
   );
-  return match?.[1] ?? path2.basename(filePath, ".jsonl");
+  return match?.[1] ?? path2.basename(filePath2, ".jsonl");
 }
-async function existingFile(filePath) {
-  if (!filePath) return null;
+async function existingFile(filePath2) {
+  if (!filePath2) return null;
   try {
-    const stats = await fs2.stat(filePath);
-    return stats.isFile() ? path2.resolve(filePath) : null;
+    const stats = await fs2.stat(filePath2);
+    return stats.isFile() ? path2.resolve(filePath2) : null;
   } catch {
     return null;
   }
@@ -752,10 +843,10 @@ async function recentRolloutFiles() {
 async function locateRollout(sessionId) {
   const files = await recentRolloutFiles();
   if (sessionId) {
-    return files.find((filePath) => sessionIdFromFilename(filePath) === sessionId) ?? null;
+    return files.find((filePath2) => sessionIdFromFilename(filePath2) === sessionId) ?? null;
   }
   const withStats = await Promise.all(
-    files.map(async (filePath) => ({ filePath, stats: await fs2.stat(filePath) }))
+    files.map(async (filePath2) => ({ filePath: filePath2, stats: await fs2.stat(filePath2) }))
   );
   return withStats.sort((left, right) => right.stats.mtimeMs - left.stats.mtimeMs)[0]?.filePath ?? null;
 }
@@ -907,14 +998,14 @@ var RolloutContextProvider = class {
     if (sessionId) {
       const registered = await this.registry.get(sessionId);
       if (registered) return { registration: registered, selection: "explicit" };
-      const filePath = [...this.caches.entries()].find(([, cache]) => cache.state.sessionId === sessionId)?.[0] ?? await locateRollout(sessionId);
-      if (!filePath) return null;
-      const stats2 = await fs2.stat(filePath);
+      const filePath2 = [...this.caches.entries()].find(([, cache]) => cache.state.sessionId === sessionId)?.[0] ?? await locateRollout(sessionId);
+      if (!filePath2) return null;
+      const stats2 = await fs2.stat(filePath2);
       return {
         selection: "explicit",
         registration: {
           sessionId,
-          transcriptPath: filePath,
+          transcriptPath: filePath2,
           cwd: null,
           model: null,
           lastSeenAt: stats2.mtime.toISOString(),
@@ -941,19 +1032,19 @@ var RolloutContextProvider = class {
       }
     };
   }
-  async readIncremental(filePath, selection, registration) {
-    const previous = this.reading.get(filePath);
-    const job = (previous ?? Promise.resolve()).catch(() => void 0).then(() => this.readTail(filePath, selection, registration));
-    this.reading.set(filePath, job);
+  async readIncremental(filePath2, selection, registration) {
+    const previous = this.reading.get(filePath2);
+    const job = (previous ?? Promise.resolve()).catch(() => void 0).then(() => this.readTail(filePath2, selection, registration));
+    this.reading.set(filePath2, job);
     try {
       return await job;
     } finally {
-      if (this.reading.get(filePath) === job) this.reading.delete(filePath);
+      if (this.reading.get(filePath2) === job) this.reading.delete(filePath2);
     }
   }
-  async readTail(filePath, selection, registration) {
-    const stats = await fs2.stat(filePath);
-    let cache = this.caches.get(filePath);
+  async readTail(filePath2, selection, registration) {
+    const stats = await fs2.stat(filePath2);
+    let cache = this.caches.get(filePath2);
     if (!cache || stats.size < cache.offset || stats.size - cache.offset > INITIAL_TAIL_BYTES) {
       const offset = Math.max(stats.size - INITIAL_TAIL_BYTES, 0);
       cache = {
@@ -964,10 +1055,10 @@ var RolloutContextProvider = class {
       };
       cache.state.truncated = offset > 0;
       if (offset > 0) {
-        const header = await this.readHeader(filePath);
+        const header = await this.readHeader(filePath2);
         if (header) parseRolloutLine(header, selection, cache.state);
       }
-      this.caches.set(filePath, cache);
+      this.caches.set(filePath2, cache);
       while (this.caches.size > 12) this.caches.delete(this.caches.keys().next().value);
     }
     if (!cache) {
@@ -975,7 +1066,7 @@ var RolloutContextProvider = class {
     }
     if (stats.size === cache.offset) return cache.state;
     const length = stats.size - cache.offset;
-    const handle = await fs2.open(filePath, "r");
+    const handle = await fs2.open(filePath2, "r");
     let bytes;
     let startOffset = cache.offset - cache.carry.length;
     try {
@@ -1050,7 +1141,7 @@ async function startDashboard(monitor, provider2, projectStatus) {
     }
     const relative = url.pathname.slice(prefix.length);
     if (req.method === "GET" && relative === "health") {
-      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.4.4", pid: process.pid, projectIntegration: projectStatus?.() }));
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ application: "context-window-monitor", version: "0.5.0", pid: process.pid, projectIntegration: projectStatus?.() }));
       return;
     }
     if (req.method === "GET" && relative === "") {

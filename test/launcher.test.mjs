@@ -36,7 +36,7 @@ async function fixture(context){
 test("concurrent clicks share one healthy service; a later click reuses it",async context=>{
   const f=await fixture(context);
   // A corrupt saved address must never redirect the launcher outside loopback.
-  await writeFile(path.join(f.state,"launcher-0.4.4.json"),JSON.stringify({version:"0.4.4",pid:123,url:"https://example.invalid/"}));
+  await writeFile(path.join(f.state,"launcher-0.5.0.json"),JSON.stringify({version:"0.5.0",pid:123,url:"https://example.invalid/"}));
   const launches=await Promise.all([f.run("--session","fixture"),f.run("--session","fixture"),f.run("--session","fixture")]);
   assert.equal(new Set(launches.map(value=>value.pid)).size,1);
   assert.equal(new Set(launches.map(value=>value.url)).size,1);
@@ -53,10 +53,10 @@ test("concurrent clicks share one healthy service; a later click reuses it",asyn
   const url=new URL(warm.url);assert.equal(url.hostname,"127.0.0.1");
   assert.equal(url.searchParams.get("session"),"fixture");assert.equal(url.searchParams.has("selection"),false);
   const health=await (await fetch(new URL("health",url))).json();
-  assert.equal(health.pid,warm.pid);assert.equal(health.version,"0.4.4");
+  assert.equal(health.pid,warm.pid);assert.equal(health.version,"0.5.0");
   assert.equal((await fetch(url)).status,200);
   assert.equal((await fetch(new URL("health",url),{headers:{Origin:"https://example.invalid"}})).status,403);
-  const saved=JSON.parse(await readFile(path.join(f.state,"launcher-0.4.4.json"),"utf8"));assert.equal(saved.pid,warm.pid);
+  const saved=JSON.parse(await readFile(path.join(f.state,"launcher-0.5.0.json"),"utf8"));assert.equal(saved.pid,warm.pid);
 });
 
 test("desktop entry selects the most recent session across projects independently of its working directory",async context=>{
@@ -115,7 +115,7 @@ test("project selection respects directory boundaries, recovers an old lock, and
   await f.log("11111111-1111-4111-8111-111111111111",project,5000);
   await f.log("22222222-2222-4222-8222-222222222222",path.join(project,"nested"),3000);
   await f.log("33333333-3333-4333-8333-333333333333",`${project}-sibling`,1000);
-  const lock=path.join(f.state,"launcher-0.4.4.lock");await writeFile(lock,"");
+  const lock=path.join(f.state,"launcher-0.5.0.lock");await writeFile(lock,"");
   const old=new Date(Date.now()-60000);await utimes(lock,old,old);
   const selected=await f.run("--cwd",project);
   assert.equal(selected.sessionId,"22222222-2222-4222-8222-222222222222");

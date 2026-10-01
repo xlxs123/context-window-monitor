@@ -1,8 +1,8 @@
 # Codex 上下文监控插件
 
-`context-window-monitor` **0.4.4**，用于 Codex Desktop / CLI。黑色上下文仪表盘，自动适配 Codex 中注册的所有本地项目。它是 Codex 插件，不依赖 DeepSeek Harness。
+`context-window-monitor` **0.5.0**，用于 Codex Desktop / CLI。依据 [dsh-context 0.62.2 源码](https://github.com/bowenliang123/dsh-context/tree/42f84915617705ccd4f1f9a0112bd5113b6089fd) 重做的黑色上下文仪表盘，自动适配 Codex 中注册的所有本地项目。它是 Codex 插件，不依赖 DeepSeek Harness。
 
-[下载 v0.4.4](https://github.com/xlxs123/context-window-monitor/releases/tag/v0.4.4) · [MIT 许可证](LICENSE) · [验证记录](docs/verification.md)
+[下载 v0.5.0](https://github.com/xlxs123/context-window-monitor/releases/tag/v0.5.0) · [许可证](LICENSE) · [上游源码适配](docs/dsh-source-adaptation.md) · [验证记录](docs/verification.md)
 
 ## 一键打开
 
@@ -36,12 +36,20 @@ Windows 首次使用：
 
 托盘和快捷键选择**本机最近活动的会话**，自动覆盖不同项目；无法识别只切换但尚未产生活动的聊天。可选项目操作不提供当前选中聊天的 ID，因此按工作目录选择**本项目最近活动的会话**，并在页面明确提示；可以通过 SESSION 切换。没有匹配时显示无数据，不跳到其他项目。程序支持 `node runtime/open-dashboard.mjs --session <session-id>` 精确打开指定会话；`--no-open` 只输出地址与启动耗时，供验证使用。
 
+## 源码适配后的界面
+
+![黑色双列仪表盘，图片仅包含演示数据](docs/screenshots/overview-0.5.0.png)
+
+按上游的统计与插件信息、Token 与耗时、左侧容量与趋势 / 右侧浏览器、事件与文件活动、Agent 网络排列。保留 Codex 托盘、快捷键和内置浏览器入口。
+
 ## 已实现
 
 - 黑色双列总览：统计卡片、输入/输出环图、当前容量、增长柱状图、分类记录浏览器、近期事件、长内容列表、Agent 网络。
 - Codex 实际 Token：最近模型输入、窗口容量、剩余量、缓存读取/写入、输出、Reasoning 输出及累计消耗。
-- 时间线、全量/增量切换、选中快照查看详情、同会话或跨会话用量对比。
-- 日志来源分类、工具调用与返回关联、带明确路径参数的文件活动、Top 5/10/20 长记录。
+- 步骤 / 轮次、全量 / 增量切换；悬停预览、点击固定，浏览器和文件列表随所选请求联动；同会话或跨会话用量对比。
+- DNA 视图按日志顺序展示记录字符量，支持来源筛选、检查和相对前一步新增记录。
+- 日志来源分类、工具调用与返回关联、读取 / 写入 / 搜索 / 图片筛选、文件路径搜索及排序、Top 5/10/20 长记录。
+- 多文件标准 `apply_patch` 请求的增减行统计；未知数量留空，不把工具结果重复计作文件操作。
 - SHA-256 完全重复长内容检测；字符数只表示文本长度，不转换为 Token。
 - 正式压缩事件识别，包括新版 `compacted`；查看前后真实请求输入快照。
 - 历史/近期 Session 选择；以明确 `parent_thread_id` 展示父子 Agent 关系并跳转。
@@ -69,7 +77,7 @@ node runtime/dashboard.mjs <session-id>
 
 插件包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/`、`skills/` 和已打包的 MCP 服务。
 
-默认插件选择器为 `context-window-monitor@personal`。双击 `Install.cmd` 可首次安装或更新到 **0.4.4**，旧版本保留备份。
+默认插件选择器为 `context-window-monitor@personal`。双击 `Install.cmd` 可首次安装或更新到 **0.5.0**，旧版本保留备份。
 
 也可在 PowerShell 执行下面一行。脚本检查环境，备份旧版，注册市场、更新缓存、验证版本并启动自动接入；兼容 Windows PowerShell 5.1：
 
@@ -97,6 +105,8 @@ Windows 主入口为插件托盘和快捷键；项目操作为可选入口，不
 | 缓存 | 输入的子集，不再加到 input 上 |
 | Reasoning | 输出的子集，不再加到 output 上；不解密隐藏内容 |
 | 累计消耗 | 独立显示，不当作当前窗口占用 |
+| 耗时 | 保留日志的时间跨度；明确 call_id 配对的调用至结果区间，并发区间合并；模型等待 / 思考 / 输出用时未提供 |
+| 文件活动 | 只解析显式结构化路径和标准补丁头；不猜测 Shell / JavaScript 中的文件访问。增减行表示补丁请求，不证明实际落盘 |
 | 日志分类、工具次数、字符数 | 只针对保留的日志范围，不声称仍全部处于模型上下文 |
 | 分类 Token、完整模型 messages、子 Agent 结果 Token | 当前无法可靠获得，明确显示 Unavailable |
 | 压缩节省量 | 正式事件两侧的请求输入差值；期间新增消息也会影响差值 |
@@ -138,7 +148,7 @@ npm run check
 npm run preview
 ```
 
-重新打包：完成 `npm run check` 后运行 `python scripts/package.py`。产物为 `dist/context-window-monitor-0.4.4.zip` 及 SHA-256 校验文件，包含源码和编译好的运行文件。第三方许可证保留在 `docs/THIRD-PARTY-NOTICES.md`。
+重新打包：完成 `npm run check` 后运行 `python scripts/package.py`。产物为 `dist/context-window-monitor-0.5.0.zip` 及 SHA-256 校验文件，包含源码和编译好的运行文件。第三方许可证保留在 `docs/THIRD-PARTY-NOTICES.md`。环图几何算法适配自 dsh-context，使用 Apache-2.0；完整许可证与修改归属随包附带。
 
 预览为 `http://127.0.0.1:4174`，明确标为**演示数据**，不会读取真实会话原文。`npm run dashboard` 才读取本机真实 Codex 数据。
 

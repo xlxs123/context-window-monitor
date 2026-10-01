@@ -1,5 +1,10 @@
 MIT License
 
+This license applies to the original code in this project. The adapted donut
+geometry in src/ui/dsh-donut.ts and its compiled UI portion is licensed under
+Apache-2.0, Copyright 2025 bowenliang123. See
+docs/licenses/dsh-context-APACHE-2.0.txt and docs/dsh-source-adaptation.md.
+
 Copyright (c) 2026 Context Window Monitor contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

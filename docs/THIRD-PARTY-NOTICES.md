@@ -1,5 +1,20 @@
 # Bundled dependency licenses
 
+## dsh-context 0.62.2 — Apache-2.0
+
+Copyright 2025 bowenliang123.
+
+The SVG donut geometry is adapted from `src/client/components/donut.tsx` at
+commit `42f84915617705ccd4f1f9a0112bd5113b6089fd` in
+https://github.com/bowenliang123/dsh-context. It was changed into a pure geometry
+helper for the Codex DOM renderer, with invalid-value checks and without React
+or the DSH SDK. The compiled UI retains this attribution.
+
+The complete Apache-2.0 license is included in
+[licenses/dsh-context-APACHE-2.0.txt](licenses/dsh-context-APACHE-2.0.txt).
+The fixed upstream revision has no separate NOTICE file. Component mapping and
+data limitations are described in [dsh-source-adaptation.md](dsh-source-adaptation.md).
+
 ## @modelcontextprotocol/sdk  MIT License
 
 Copyright (c) 2024 Anthropic, PBC

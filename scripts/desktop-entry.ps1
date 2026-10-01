@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$DataDirectory,
     [Parameter(Mandatory = $true)][string]$NodePath,
-    [string]$Version = '0.4.4',
+    [string]$Version = '0.5.0',
     [switch]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'

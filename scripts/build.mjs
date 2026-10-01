@@ -49,7 +49,7 @@ await Promise.all([
     target: "es2022",
     minify: true,
     sourcemap: false,
-    legalComments: "none",
+    legalComments: "inline",
     logLevel: "info",
   }),
 ]);

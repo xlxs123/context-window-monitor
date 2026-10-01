@@ -1,11 +1,11 @@
 {
   "name": "context-window-monitor",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "Inspect the exact Codex context-window snapshot reported by the active session.",
   "author": {
     "name": "Local developer"
   },
-  "license": "MIT",
+  "license": "MIT AND Apache-2.0",
   "keywords": [
     "codex",
     "context-window",
@@ -15,7 +15,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Context Window Monitor",
-    "shortDescription": "黑色上下文仪表盘：真实用量、工具记录与压缩分析。",
+    "shortDescription": "黑色上下文仪表盘：真实用量、DNA、趋势与文件活动。",
     "longDescription": "Codex 本地上下文可观测插件。黑色仪表盘提供真实 Token 分布、增长趋势、日志记录浏览、工具与文件活动、快照对比、正式压缩事件和明确关联的 Agent 网络。原文默认隐藏，不估算未上报的分类 Token。",
     "developerName": "Local developer",
     "category": "Productivity",
@@ -28,7 +28,7 @@
       "Open the context window monitor.",
       "Did this session compact its context?"
     ],
-    "brandColor": "#111114"
+    "brandColor": "#08090b"
   },
   "mcpServers": "./.mcp.json"
 }

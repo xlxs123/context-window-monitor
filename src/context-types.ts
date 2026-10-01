@@ -70,6 +70,13 @@ export interface ProviderResult {
 }
 
 export type ActivityCategory = "system" | "developer" | "user" | "assistant" | "reasoning" | "tool_call" | "tool_result" | "compaction" | "other";
+export type FileOperationKind = "read" | "write" | "search" | "image" | "other";
+export interface ActivityFileOperation {
+  path: string;
+  kind: FileOperationKind;
+  addedLines: number | null;
+  removedLines: number | null;
+}
 export interface ActivityItem {
   id: string;
   timestamp: string;
@@ -82,6 +89,7 @@ export interface ActivityItem {
   characters: number;
   hash: string;
   file: string | null;
+  fileOperations?: ActivityFileOperation[];
   tokens: null;
 }
 export interface ActivityReport {
@@ -91,7 +99,7 @@ export interface ActivityReport {
   parentSessionId: string | null;
   agentName: string | null;
   tools: Array<{name:string;calls:number;results:number;argumentCharacters:number;resultCharacters:number;tokens:null}>;
-  files: Array<{path:string;calls:number;characters:number}>;
+  files: Array<{path:string;calls:number;characters:number;readCalls?:number;writeCalls?:number;searchCalls?:number;imageCalls?:number;addedLines?:number|null;removedLines?:number|null;lastAt?:string|null;itemIds?:string[]}>;
   duplicates: Array<{hash:string;ids:string[];characters:number}>;
 }
 
