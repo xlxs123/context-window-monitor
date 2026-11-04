@@ -16,6 +16,7 @@ import {
   type ParsedRolloutState,
 } from "./rollout-event-parser.js";
 import { SessionRegistry } from "./session-registry.js";
+import { sessionTitles } from "./session-titles.js";
 import { digest, object, summarizeActivity, visibleText } from "./activity-tracker.js";
 
 const INITIAL_TAIL_BYTES = 2 * 1024 * 1024;
@@ -159,7 +160,7 @@ export class RolloutContextProvider implements ContextProvider {
     return null;
   }
 
-  async listSessions(limit=20):Promise<Array<{sessionId:string;model:string|null;lastSeenAt:string;active:boolean;parentSessionId:string|null;agentName:string|null}>> {
+  async listSessions(limit=20):Promise<Array<{sessionId:string;title:string|null;model:string|null;lastSeenAt:string;active:boolean;parentSessionId:string|null;agentName:string|null}>> {
     const registered=await this.registry.list(limit);
     const files=await recentRolloutFiles();
     const recent=(await Promise.all(files.map(async file=>({file,stats:await fs.stat(file)})))).sort((a,b)=>b.stats.mtimeMs-a.stats.mtimeMs).slice(0,limit);
@@ -170,7 +171,9 @@ export class RolloutContextProvider implements ContextProvider {
       const previous=result.get(id);
       result.set(id,{sessionId:id,model:previous?.model??null,lastSeenAt:stats.mtime.toISOString(),active:previous?.active??false,parentSessionId:state.parentSessionId,agentName:state.agentName});
     }
-    return [...result.values()].sort((a,b)=>b.lastSeenAt.localeCompare(a.lastSeenAt)).slice(0,limit);
+    const sessions = [...result.values()].sort((a,b)=>b.lastSeenAt.localeCompare(a.lastSeenAt)).slice(0,limit);
+    const titles = await sessionTitles(sessions.map(session => session.sessionId));
+    return sessions.map(session => ({...session, title: titles.get(session.sessionId) ?? null}));
   }
 
   async readItem(sessionId:string,itemId:string):Promise<{id:string;text:string;truncated:boolean;scope:string}> {

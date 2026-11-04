@@ -2,10 +2,14 @@ import type {ActivityItem, ContextDashboard, RawContextSnapshot} from "../contex
 import {styles} from "./styles.js";
 import {categoryLabels as labels, categoryColors as colors, scopedItems, categoryComposition, observedTiming, fileRows, trendGroups} from "./dashboard-model.js";
 import {donutArcs} from "./dsh-donut.js";
+import {sessionLabel, isGuardianSession, visibleSessions} from "./session-label.js";
 
 declare global {interface Window {openai?:{toolOutput?:unknown;callTool?:(name:string,args:Record<string,unknown>)=>Promise<unknown>};__CONTEXT_MONITOR_PREVIEW__?:unknown}}
 type Page="overview"|"timeline"|"records"|"sources"|"tools"|"agents"|"compaction"|"compare"|"settings";
-interface Session {sessionId:string;model:string|null;parentSessionId?:string|null;agentName?:string|null}
+interface Session {sessionId:string;title?:string|null;model:string|null;parentSessionId?:string|null;agentName?:string|null}
+const guardianPreference="context-monitor.showGuardianReviews";
+function savedGuardianPreference():boolean {try{return localStorage.getItem(guardianPreference)==="true";}catch{return false;}}
+
 type Segment={name:string;value:number|null;color:string};
 const tabs:Record<Page,string>={overview:"上下文",timeline:"趋势",records:"记录",sources:"来源",tools:"工具与文件",agents:"Agent 网络",compaction:"压缩",compare:"对比",settings:"设置"};
 const esc=(value:unknown):string=>String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
@@ -34,6 +38,7 @@ export class ContextDetailsPanel {
   private page:Page="overview";
   private compact=false;
   private sessions:Session[]=[];
+  private showGuardianReviews=savedGuardianPreference();
   private sessionId=new URLSearchParams(location.search).get("session")??"";
   private projectSelection=new URLSearchParams(location.search).get("selection")??"";
   private selectedIndex=-1;
@@ -153,7 +158,7 @@ export class ContextDetailsPanel {
     const options=(selected:number)=>snapshots.map((snapshot,index)=>`<option value="${index}" ${selected===index?"selected":""}>#${index+1} · ${time(snapshot.timestamp)} · ${short(snapshot.last.inputTokens)}</option>`).join("");
     const names={inputTokens:"实际输入",cachedInputTokens:"缓存读取",cacheWriteInputTokens:"缓存写入",outputTokens:"输出",reasoningOutputTokens:"Reasoning 输出",totalTokens:"总计"};
     const rows=left&&right?(Object.keys(names) as Array<keyof typeof names>).map(key=>`<tr><td>${names[key]}</td><td>${num(left.last[key])}</td><td>${num(right.last[key])}</td><td>${signed(right.last[key]-left.last[key])}</td></tr>`).join(""):"";
-    return card("请求快照对比",`<div class="compare-controls"><label>快照 A<select data-field="a">${options(this.a)}</select></label><label>快照 B<select data-field="b">${options(this.b<0?snapshots.length-1:this.b)}</select></label></div><div class="filters"><select data-field="compare-session" aria-label="对比会话"><option value="">选择另一个会话</option>${this.sessions.filter(session=>session.sessionId!==this.sessionId).map(session=>`<option value="${esc(session.sessionId)}" ${this.compareSession===session.sessionId?"selected":""}>${esc(session.agentName??session.sessionId)}</option>`).join("")}</select><button data-action="compare-session" ${!this.compareSession?"disabled":""}>对比会话</button></div>${rows?`<div class="table-wrap"><table><thead><tr><th>字段</th><th>A</th><th>B</th><th>变化</th></tr></thead><tbody>${rows}</tbody></table></div>`:empty("需要有实际用量的快照。")}<p class="note">对比 Codex 实际用量字段；完整模型 messages 快照未提供。</p>`);
+    return card("请求快照对比",`<div class="compare-controls"><label>快照 A<select data-field="a">${options(this.a)}</select></label><label>快照 B<select data-field="b">${options(this.b<0?snapshots.length-1:this.b)}</select></label></div><div class="filters"><select data-field="compare-session" aria-label="对比会话"><option value="">选择另一个会话</option>${visibleSessions(this.sessions,this.showGuardianReviews).filter(session=>session.sessionId!==this.sessionId).map(session=>`<option value="${esc(session.sessionId)}" ${this.compareSession===session.sessionId?"selected":""}>${esc(sessionLabel(session))}</option>`).join("")}</select><button data-action="compare-session" ${!this.compareSession?"disabled":""}>对比会话</button></div>${rows?`<div class="table-wrap"><table><thead><tr><th>字段</th><th>A</th><th>B</th><th>变化</th></tr></thead><tbody>${rows}</tbody></table></div>`:empty("需要有实际用量的快照。")}<p class="note">对比 Codex 实际用量字段；完整模型 messages 快照未提供。</p>`);
   }
   private body():string {
     const dashboard=this.dashboard;if(!dashboard)return empty(this.error||"正在读取 Codex 上下文…");
@@ -183,7 +188,7 @@ export class ContextDetailsPanel {
     const inspectorScroll=this.root.querySelector<HTMLElement>(".inspector")?.scrollTop??0;
     const dashboard=this.dashboard,usage=dashboard?.usage;
     const selection=this.projectSelection?`<div class="selection-note">${this.projectSelection==="recent-session"?"托盘入口：最近活动会话；仅切换聊天但未产生活动时，不会改变选择。":this.projectSelection==="no-project-session"?"当前项目还没有可用会话。":"项目入口：本项目最近活动会话。"}</div>`:"";
-    this.root.innerHTML=`<style>${styles}</style><article class="monitor ${this.compact?"compact":""}" aria-label="CODEX CONTEXT MONITOR"><header class="header"><span class="logo" aria-hidden="true">◉</span><div><h1>上下文监控 <small>CODEX</small></h1><p>请求 · 上下文 · 文件 · Agent</p></div><div class="actions"><span class="badge ${this.preview?"demo":""}">${this.preview?"演示数据":this.paused?"已暂停":"● 本地只读"}</span><button data-action="refresh">刷新</button><button data-action="export" ${dashboard?"":"disabled"}>导出</button><button data-action="compact">${this.compact?"展开":"收起"}</button></div></header><div class="session"><label for="session-picker">会话</label><select id="session-picker" data-field="session" aria-label="选择 Session"><option value="${esc(this.sessionId)}">${esc(dashboard?.activity?.agentName??(this.sessionId||"自动选择会话"))}</option>${this.sessions.filter(session=>session.sessionId!==this.sessionId).map(session=>`<option value="${esc(session.sessionId)}">${esc(session.agentName??session.sessionId)}</option>`).join("")}</select><span class="model">${esc(usage?.model??"模型未提供")}</span><span class="badge">${esc(usage?.precision??"未提供")}</span></div><nav class="tabs" aria-label="监控导航">${Object.entries(tabs).map(([page,label])=>`<button data-page="${page}" class="${this.page===page?"active":""}" aria-current="${this.page===page?"page":"false"}">${label}</button>`).join("")}</nav><div class="summary-bar"><strong>${short(usage?.usedTokens)} / ${short(usage?.totalTokens)}</strong> · ${usage?.percentage?.toFixed(1)??"—"}%</div><main class="page">${selection}${usage?.precision==="estimated"?'<div class="notice">用量是 Codex 实际上报；当前使用最近日志回退，会话匹配待确认。</div>':""}${this.error?`<div class="notice" role="status">${esc(this.error)}</div>`:""}<div class="page-title"><strong>${tabs[this.page]}</strong><div>${this.selectedIndex>=0?`<span class="badge accent">已固定请求 #${this.selectedIndex+1}</span> <button data-action="live">返回最新</button>`:""}<small>更新 ${time(usage?.updatedAt)}</small></div></div>${this.body()}<footer class="footer"><span>Token 使用 Codex 实际上报 · 分类面积使用日志字符量</span><span>只读 · 原文按需读取 · v0.5.0</span></footer></main>${this.selectedItem?this.inspector():""}</article>`;
+    this.root.innerHTML=`<style>${styles}</style><article class="monitor ${this.compact?"compact":""}" aria-label="CODEX CONTEXT MONITOR"><header class="header"><span class="logo" aria-hidden="true">◉</span><div><h1>上下文监控 <small>CODEX</small></h1><p>请求 · 上下文 · 文件 · Agent</p></div><div class="actions"><span class="badge ${this.preview?"demo":""}">${this.preview?"演示数据":this.paused?"已暂停":"● 本地只读"}</span><button data-action="refresh">刷新</button><button data-action="export" ${dashboard?"":"disabled"}>导出</button><button data-action="compact">${this.compact?"展开":"收起"}</button></div></header><div class="session"><label for="session-picker">会话</label><select id="session-picker" data-field="session" aria-label="按标题选择会话">${this.sessionOption()}${visibleSessions(this.sessions,this.showGuardianReviews).filter(session=>session.sessionId!==this.sessionId).map(session=>`<option value="${esc(session.sessionId)}">${esc(sessionLabel(session))}</option>`).join("")}</select><label class="guardian-toggle"><input type="checkbox" data-field="show-guardian" ${this.showGuardianReviews?"checked":""}>显示 Guardian review</label><span class="model">${esc(usage?.model??"模型未提供")}</span><span class="badge">${esc(usage?.precision??"未提供")}</span></div><nav class="tabs" aria-label="监控导航">${Object.entries(tabs).map(([page,label])=>`<button data-page="${page}" class="${this.page===page?"active":""}" aria-current="${this.page===page?"page":"false"}">${label}</button>`).join("")}</nav><div class="summary-bar"><strong>${short(usage?.usedTokens)} / ${short(usage?.totalTokens)}</strong> · ${usage?.percentage?.toFixed(1)??"—"}%</div><main class="page">${selection}${usage?.precision==="estimated"?'<div class="notice">用量是 Codex 实际上报；当前使用最近日志回退，会话匹配待确认。</div>':""}${this.error?`<div class="notice" role="status">${esc(this.error)}</div>`:""}<div class="page-title"><strong>${tabs[this.page]}</strong><div>${this.selectedIndex>=0?`<span class="badge accent">已固定请求 #${this.selectedIndex+1}</span> <button data-action="live">返回最新</button>`:""}<small>更新 ${time(usage?.updatedAt)}</small></div></div>${this.body()}<footer class="footer"><span>Token 使用 Codex 实际上报 · 分类面积使用日志字符量</span><span>只读 · 原文按需读取 · v0.5.0</span></footer></main>${this.selectedItem?this.inspector():""}</article>`;
     this.root.querySelectorAll<HTMLDetailsElement>("details").forEach(detail=>{if(openGroups.has(detail.dataset.group??detail.dataset.file))detail.open=true;});
     const inspector=this.root.querySelector<HTMLElement>(".inspector");if(inspector)inspector.scrollTop=inspectorScroll;
     if(focus==="query"||focus==="file-query"){const input=this.root.querySelector<HTMLInputElement>(`[data-field="${focus}"]`);input?.focus();if(caret!==null)input?.setSelectionRange(caret,caret);}
@@ -227,6 +232,10 @@ export class ContextDetailsPanel {
     const input=event.target as HTMLInputElement;
     switch(input.dataset.field){
       case "session":await this.switchSession(input.value);return;
+      case "show-guardian":
+        this.showGuardianReviews=input.checked;
+        try{localStorage.setItem(guardianPreference,String(this.showGuardianReviews));}catch{/* Keep filtering usable when storage is unavailable. */}
+        await this.applySessionFilter();return;
       case "category":this.category=input.value;break;
       case "focus":this.selectedIndex=Number(input.value);this.hoveredIndex=null;break;
       case "file-sort":this.fileSort=input.value;break;
@@ -247,7 +256,19 @@ export class ContextDetailsPanel {
     catch(error){if(version===this.sequence){this.error=`刷新失败，保留最后快照：${String(error)}`;this.render();}}
     finally{if(version===this.sequence)this.refreshing=false;}
   }
-  private async loadSessions():Promise<void>{if(this.preview)return;try{const data=obj(obj(await this.callTool("list_context_sessions",{limit:20}))?.structuredContent);if(Array.isArray(data?.sessions)){this.sessions=data.sessions as Session[];this.render();}}catch{/* Keep the selected session usable if discovery fails. */}}
+  private sessionOption():string {
+    const current=this.sessions.find(session=>session.sessionId===this.sessionId)??{sessionId:this.sessionId,model:this.dashboard?.usage.model??null,agentName:this.dashboard?.activity?.agentName??null};
+    if(!this.showGuardianReviews&&isGuardianSession(current))return '<option value="" disabled selected>暂无普通会话（勾选以显示 Guardian review）</option>';
+    return `<option value="${esc(this.sessionId)}">${esc(this.sessionId?sessionLabel(current):"自动选择会话")}</option>`;
+  }
+  private async applySessionFilter():Promise<void> {
+    const visible=visibleSessions(this.sessions,this.showGuardianReviews);
+    if(this.compareSession&&!visible.some(session=>session.sessionId===this.compareSession)){this.compareSession="";this.other=null;}
+    const current=this.sessions.find(session=>session.sessionId===this.sessionId)??{sessionId:this.sessionId,model:this.dashboard?.usage.model??null,agentName:this.dashboard?.activity?.agentName??null};
+    if(!this.showGuardianReviews&&isGuardianSession(current)&&visible[0]){await this.switchSession(visible[0].sessionId);return;}
+    this.render();
+  }
+  private async loadSessions():Promise<void>{if(this.preview)return;try{const data=obj(obj(await this.callTool("list_context_sessions",{limit:20}))?.structuredContent);if(Array.isArray(data?.sessions)){this.sessions=data.sessions as Session[];await this.applySessionFilter();}}catch{/* Keep the selected session usable if discovery fails. */}}
   private async callTool(name:string,args:Record<string,unknown>):Promise<unknown>{
     if(name==="get_context_usage")args={...args,details:true};
     if(this.preview)throw new Error("演示模式不读取任何真实原文。");

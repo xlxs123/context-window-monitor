@@ -1,8 +1,8 @@
 // src/open-dashboard.ts
 import { spawn as spawn2 } from "node:child_process";
 import { mkdir as mkdir2, open, readFile as readFile3, rename, stat, unlink, writeFile as writeFile2 } from "node:fs/promises";
-import { homedir as homedir5 } from "node:os";
-import path7 from "node:path";
+import { homedir as homedir6 } from "node:os";
+import path8 from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay2 } from "node:timers/promises";
 
@@ -388,9 +388,9 @@ async function startDashboard(monitor, provider, projectStatus) {
 }
 
 // src/providers/rollout-context-provider.ts
-import { promises as fs2 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
-import path2 from "node:path";
+import { promises as fs3 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import path3 from "node:path";
 
 // src/providers/activity-tracker.ts
 import { createHash } from "node:crypto";
@@ -866,6 +866,36 @@ var SessionRegistry = class {
   }
 };
 
+// src/providers/session-titles.ts
+import { promises as fs2 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import path2 from "node:path";
+async function sessionTitles(ids) {
+  const titles = /* @__PURE__ */ new Map();
+  if (!ids.length) return titles;
+  const configured = process.env.CODEX_HOME?.trim();
+  const home = configured && !configured.includes("${") ? configured : path2.join(homedir2(), ".codex");
+  try {
+    const files = (await fs2.readdir(home)).filter((file) => /^state_\d+\.sqlite$/u.test(file)).sort((a, b) => Number(b.match(/\d+/u)[0]) - Number(a.match(/\d+/u)[0]));
+    if (!files[0]) return titles;
+    const { DatabaseSync } = await import("node:sqlite");
+    const database = new DatabaseSync(path2.join(home, files[0]), { readOnly: true });
+    try {
+      const columns = database.prepare("PRAGMA table_info(threads)").all();
+      const display = columns.some((column) => column.name === "name") ? "COALESCE(NULLIF(TRIM(name), ''), title)" : "title";
+      const query = database.prepare(`SELECT ${display} AS title FROM threads WHERE id = ?`);
+      for (const id of ids) {
+        const row = query.get(id);
+        if (typeof row?.title === "string" && row.title.trim()) titles.set(id, row.title.trim());
+      }
+    } finally {
+      database.close();
+    }
+  } catch {
+  }
+  return titles;
+}
+
 // src/providers/rollout-context-provider.ts
 var INITIAL_TAIL_BYTES = 2 * 1024 * 1024;
 var MAX_SNAPSHOTS = 80;
@@ -879,23 +909,23 @@ function selectSnapshotsForModel(snapshots, activeModel) {
 function usableEnvironmentPath2(value) {
   const trimmed = value?.trim();
   if (!trimmed || trimmed.includes("${")) return null;
-  return path2.resolve(trimmed);
+  return path3.resolve(trimmed);
 }
 function codexSessionsRoot() {
-  const codexDirectory = usableEnvironmentPath2(process.env.CODEX_HOME) ?? path2.join(homedir2(), ".codex");
-  return path2.join(codexDirectory, "sessions");
+  const codexDirectory = usableEnvironmentPath2(process.env.CODEX_HOME) ?? path3.join(homedir3(), ".codex");
+  return path3.join(codexDirectory, "sessions");
 }
 function sessionIdFromFilename(filePath2) {
-  const match = path2.basename(filePath2).match(
+  const match = path3.basename(filePath2).match(
     /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/iu
   );
-  return match?.[1] ?? path2.basename(filePath2, ".jsonl");
+  return match?.[1] ?? path3.basename(filePath2, ".jsonl");
 }
 async function existingFile(filePath2) {
   if (!filePath2) return null;
   try {
-    const stats = await fs2.stat(filePath2);
-    return stats.isFile() ? path2.resolve(filePath2) : null;
+    const stats = await fs3.stat(filePath2);
+    return stats.isFile() ? path3.resolve(filePath2) : null;
   } catch {
     return null;
   }
@@ -905,21 +935,21 @@ async function recentRolloutFiles() {
   const files = [];
   let years;
   try {
-    years = (await fs2.readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 2);
+    years = (await fs3.readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 2);
   } catch {
     return [];
   }
   for (const year of years) {
-    const yearPath = path2.join(root, year);
-    const months = (await fs2.readdir(yearPath, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 3);
+    const yearPath = path3.join(root, year);
+    const months = (await fs3.readdir(yearPath, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 3);
     for (const month of months) {
-      const monthPath = path2.join(yearPath, month);
-      const days = (await fs2.readdir(monthPath, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 14);
+      const monthPath = path3.join(yearPath, month);
+      const days = (await fs3.readdir(monthPath, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 14);
       for (const day of days) {
-        const dayPath = path2.join(monthPath, day);
-        const dayFiles = await fs2.readdir(dayPath, { withFileTypes: true });
+        const dayPath = path3.join(monthPath, day);
+        const dayFiles = await fs3.readdir(dayPath, { withFileTypes: true });
         files.push(
-          ...dayFiles.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl")).map((entry) => path2.join(dayPath, entry.name))
+          ...dayFiles.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl")).map((entry) => path3.join(dayPath, entry.name))
         );
       }
     }
@@ -932,7 +962,7 @@ async function locateRollout(sessionId) {
     return files.find((filePath2) => sessionIdFromFilename(filePath2) === sessionId) ?? null;
   }
   const withStats = await Promise.all(
-    files.map(async (filePath2) => ({ filePath: filePath2, stats: await fs2.stat(filePath2) }))
+    files.map(async (filePath2) => ({ filePath: filePath2, stats: await fs3.stat(filePath2) }))
   );
   return withStats.sort((left, right) => right.stats.mtimeMs - left.stats.mtimeMs)[0]?.filePath ?? null;
 }
@@ -945,16 +975,16 @@ var RolloutContextProvider = class {
   reading = /* @__PURE__ */ new Map();
   /** Project actions do not expose the selected chat ID. Pick a recent project log explicitly. */
   async latestSessionForDirectory(directory) {
-    const root = path2.resolve(directory);
+    const root = path3.resolve(directory);
     const files = await recentRolloutFiles();
-    const recent = (await Promise.all(files.map(async (file) => ({ file, modified: await fs2.stat(file).then((s) => s.mtimeMs).catch(() => 0) })))).sort((a, b) => b.modified - a.modified).slice(0, 200);
+    const recent = (await Promise.all(files.map(async (file) => ({ file, modified: await fs3.stat(file).then((s) => s.mtimeMs).catch(() => 0) })))).sort((a, b) => b.modified - a.modified).slice(0, 200);
     for (const { file } of recent) {
       try {
         const header = await this.readHeader(file);
         const record = header ? JSON.parse(header) : null;
         if (record?.type !== "session_meta" || typeof record.payload?.cwd !== "string") continue;
-        const relative = path2.relative(root, path2.resolve(record.payload.cwd));
-        if (relative === "" || !relative.startsWith(`..${path2.sep}`) && relative !== ".." && !path2.isAbsolute(relative)) return sessionIdFromFilename(file);
+        const relative = path3.relative(root, path3.resolve(record.payload.cwd));
+        if (relative === "" || !relative.startsWith(`..${path3.sep}`) && relative !== ".." && !path3.isAbsolute(relative)) return sessionIdFromFilename(file);
       } catch {
       }
     }
@@ -963,7 +993,7 @@ var RolloutContextProvider = class {
   async listSessions(limit = 20) {
     const registered = await this.registry.list(limit);
     const files = await recentRolloutFiles();
-    const recent = (await Promise.all(files.map(async (file) => ({ file, stats: await fs2.stat(file) })))).sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs).slice(0, limit);
+    const recent = (await Promise.all(files.map(async (file) => ({ file, stats: await fs3.stat(file) })))).sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs).slice(0, limit);
     const result = new Map(registered.map((s) => [s.sessionId, { sessionId: s.sessionId, model: s.model, lastSeenAt: s.lastSeenAt, active: s.endedAt === null, parentSessionId: null, agentName: null }]));
     for (const { file, stats } of recent) {
       const id = sessionIdFromFilename(file);
@@ -973,7 +1003,9 @@ var RolloutContextProvider = class {
       const previous = result.get(id);
       result.set(id, { sessionId: id, model: previous?.model ?? null, lastSeenAt: stats.mtime.toISOString(), active: previous?.active ?? false, parentSessionId: state.parentSessionId, agentName: state.agentName });
     }
-    return [...result.values()].sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt)).slice(0, limit);
+    const sessions = [...result.values()].sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt)).slice(0, limit);
+    const titles = await sessionTitles(sessions.map((session) => session.sessionId));
+    return sessions.map((session) => ({ ...session, title: titles.get(session.sessionId) ?? null }));
   }
   async readItem(sessionId, itemId) {
     await this.getContext({ sessionId });
@@ -981,7 +1013,7 @@ var RolloutContextProvider = class {
     if (!entry) throw new Error("\u8BE5\u8BB0\u5F55\u4E0D\u5728\u4FDD\u7559\u8303\u56F4\u5185\uFF1B\u8BF7\u5237\u65B0\u540E\u91CD\u8BD5\u3002");
     const [file, cache] = entry;
     const location = cache.state.locations.get(itemId);
-    const handle = await fs2.open(file, "r");
+    const handle = await fs3.open(file, "r");
     let raw;
     try {
       raw = Buffer.alloc(location.length);
@@ -997,7 +1029,7 @@ var RolloutContextProvider = class {
     return { id: itemId, text: body.slice(0, 32768), truncated: body.length > 32768, scope: "Codex \u65E5\u5FD7\u516C\u5F00\u8BB0\u5F55\uFF1B\u4E0D\u662F\u5B8C\u6574\u6A21\u578B\u8BF7\u6C42\uFF1B\u4E0D\u89E3\u5BC6 reasoning" };
   }
   async readHeader(file) {
-    const h = await fs2.open(file, "r");
+    const h = await fs3.open(file, "r");
     try {
       const buffer = Buffer.alloc(256 * 1024);
       const { bytesRead } = await h.read(buffer, 0, buffer.length, 0);
@@ -1086,7 +1118,7 @@ var RolloutContextProvider = class {
       if (registered) return { registration: registered, selection: "explicit" };
       const filePath2 = [...this.caches.entries()].find(([, cache]) => cache.state.sessionId === sessionId)?.[0] ?? await locateRollout(sessionId);
       if (!filePath2) return null;
-      const stats2 = await fs2.stat(filePath2);
+      const stats2 = await fs3.stat(filePath2);
       return {
         selection: "explicit",
         registration: {
@@ -1104,7 +1136,7 @@ var RolloutContextProvider = class {
     if (active) return { registration: active, selection: "active-hook" };
     const latestPath = await locateRollout();
     if (!latestPath) return null;
-    const stats = await fs2.stat(latestPath);
+    const stats = await fs3.stat(latestPath);
     return {
       selection: "latest-rollout",
       registration: {
@@ -1129,7 +1161,7 @@ var RolloutContextProvider = class {
     }
   }
   async readTail(filePath2, selection, registration) {
-    const stats = await fs2.stat(filePath2);
+    const stats = await fs3.stat(filePath2);
     let cache = this.caches.get(filePath2);
     if (!cache || stats.size < cache.offset || stats.size - cache.offset > INITIAL_TAIL_BYTES) {
       const offset = Math.max(stats.size - INITIAL_TAIL_BYTES, 0);
@@ -1152,7 +1184,7 @@ var RolloutContextProvider = class {
     }
     if (stats.size === cache.offset) return cache.state;
     const length = stats.size - cache.offset;
-    const handle = await fs2.open(filePath2, "r");
+    const handle = await fs3.open(filePath2, "r");
     let bytes;
     let startOffset = cache.offset - cache.carry.length;
     try {
@@ -1199,9 +1231,9 @@ var RolloutContextProvider = class {
 
 // src/project-actions.ts
 import { createHash as createHash3, randomUUID } from "node:crypto";
-import { promises as fs4 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import path4 from "node:path";
+import { promises as fs5 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import path5 from "node:path";
 
 // node_modules/smol-toml/dist/error.js
 function getLineColFromPtr(string, ptr) {
@@ -1961,24 +1993,24 @@ function parse(toml, options = {}) {
 var HAS_WELLFORMED = !!"".isWellFormed;
 
 // src/project-registry.ts
-import { promises as fs3 } from "node:fs";
-import path3 from "node:path";
+import { promises as fs4 } from "node:fs";
+import path4 from "node:path";
 async function discoverProjects(codexHome) {
-  const files = await fs3.readdir(codexHome).catch((error) => {
+  const files = await fs4.readdir(codexHome).catch((error) => {
     if (error.code === "ENOENT") return [];
     throw error;
   });
   const databases = files.filter((file) => /^state_\d+\.sqlite$/u.test(file)).sort((a, b) => Number(b.match(/\d+/u)[0]) - Number(a.match(/\d+/u)[0]));
   if (databases.length) {
     const { DatabaseSync } = await import("node:sqlite");
-    const database = new DatabaseSync(path3.join(codexHome, databases[0]), { readOnly: true });
+    const database = new DatabaseSync(path4.join(codexHome, databases[0]), { readOnly: true });
     try {
       const hasProjects = database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'").get();
       if (hasProjects) {
         const rows = database.prepare("SELECT p.id, p.name, r.path FROM projects p JOIN project_roots r ON r.project_id=p.id WHERE r.position=0 ORDER BY p.position").all();
         const projects2 = rows.map((row) => {
-          if (typeof row.id !== "string" || typeof row.name !== "string" || typeof row.path !== "string" || !path3.isAbsolute(row.path)) throw new Error("Invalid project registry entry");
-          return { id: row.id, name: row.name, root: path3.resolve(row.path) };
+          if (typeof row.id !== "string" || typeof row.name !== "string" || typeof row.path !== "string" || !path4.isAbsolute(row.path)) throw new Error("Invalid project registry entry");
+          return { id: row.id, name: row.name, root: path4.resolve(row.path) };
         });
         return { projects: projects2, source: databases[0], complete: true };
       }
@@ -1986,10 +2018,10 @@ async function discoverProjects(codexHome) {
       database.close();
     }
   }
-  const stateFile = path3.join(codexHome, ".codex-global-state.json");
+  const stateFile = path4.join(codexHome, ".codex-global-state.json");
   let raw;
   try {
-    raw = await fs3.readFile(stateFile, "utf8");
+    raw = await fs4.readFile(stateFile, "utf8");
   } catch (error) {
     if (error.code === "ENOENT") return { projects: [], source: "unavailable", complete: false };
     throw error;
@@ -1999,8 +2031,8 @@ async function discoverProjects(codexHome) {
   const projects = [];
   for (const [id, value] of Object.entries(state["local-projects"])) {
     const project = value;
-    if (!Array.isArray(project.rootPaths) || typeof project.rootPaths[0] !== "string" || !path3.isAbsolute(project.rootPaths[0])) throw new Error("Invalid legacy project entry");
-    projects.push({ id, name: typeof project.name === "string" ? project.name : id, root: path3.resolve(project.rootPaths[0]) });
+    if (!Array.isArray(project.rootPaths) || typeof project.rootPaths[0] !== "string" || !path4.isAbsolute(project.rootPaths[0])) throw new Error("Invalid legacy project entry");
+    projects.push({ id, name: typeof project.name === "string" ? project.name : id, root: path4.resolve(project.rootPaths[0]) });
   }
   return { projects, source: ".codex-global-state.json", complete: true };
 }
@@ -2008,18 +2040,18 @@ async function discoverProjects(codexHome) {
 // src/project-actions.ts
 var BEGIN = "# BEGIN context-window-monitor managed action";
 var END = "# END context-window-monitor managed action";
-var samePath = (a, b) => path4.relative(a, b) === "";
-var exists = async (file) => fs4.lstat(file).then(() => true).catch((error) => {
+var samePath = (a, b) => path5.relative(a, b) === "";
+var exists = async (file) => fs5.lstat(file).then(() => true).catch((error) => {
   if (error.code === "ENOENT") return false;
   throw error;
 });
 async function atomicWrite(file, text2) {
   const temporary = `${file}.${randomUUID()}.tmp`;
-  await fs4.writeFile(temporary, text2, { mode: 384 });
+  await fs5.writeFile(temporary, text2, { mode: 384 });
   try {
-    await fs4.rename(temporary, file);
+    await fs5.rename(temporary, file);
   } finally {
-    await fs4.unlink(temporary).catch(() => void 0);
+    await fs5.unlink(temporary).catch(() => void 0);
   }
 }
 function managedSpan(text2) {
@@ -2042,8 +2074,8 @@ function sameBlock(a, b) {
 var ProjectActions = class {
   constructor(options) {
     this.options = options;
-    this.codexHome = options.codexHome || process.env.CODEX_HOME || path4.join(homedir3(), ".codex");
-    this.dataDirectory = options.dataDirectory || path4.join(this.codexHome, "context-window-monitor");
+    this.codexHome = options.codexHome || process.env.CODEX_HOME || path5.join(homedir4(), ".codex");
+    this.dataDirectory = options.dataDirectory || path5.join(this.codexHome, "context-window-monitor");
   }
   options;
   status = { enabled: true, source: "pending", projects: 0, configured: 0, errors: [], updatedAt: null };
@@ -2065,8 +2097,8 @@ var ProjectActions = class {
   actionBlock() {
     const platform = this.options.platform || process.platform;
     const quoted = (value) => `'${value.replaceAll("'", "'\\''")}'`;
-    const windowsScript = `& '${path4.join(this.options.pluginRoot, "scripts", "open-dashboard.ps1").replaceAll("'", "''")}'`;
-    const command = platform === "win32" ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${Buffer.from(windowsScript, "utf16le").toString("base64")}` : `${quoted(this.options.nodePath || process.execPath)} ${quoted(path4.join(this.options.pluginRoot, "runtime", "open-dashboard.mjs"))}`;
+    const windowsScript = `& '${path5.join(this.options.pluginRoot, "scripts", "open-dashboard.ps1").replaceAll("'", "''")}'`;
+    const command = platform === "win32" ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${Buffer.from(windowsScript, "utf16le").toString("base64")}` : `${quoted(this.options.nodePath || process.execPath)} ${quoted(path5.join(this.options.pluginRoot, "runtime", "open-dashboard.mjs"))}`;
     return `${BEGIN}
 [[actions]]
 name = "\u4E0A\u4E0B\u6587\u76D1\u63A7"
@@ -2077,65 +2109,65 @@ ${END}
 `;
   }
   async safeConfig(root, file) {
-    const canonical = await fs4.realpath(root);
-    for (const candidate of [path4.join(root, ".codex"), path4.dirname(file), file]) {
+    const canonical = await fs5.realpath(root);
+    for (const candidate of [path5.join(root, ".codex"), path5.dirname(file), file]) {
       if (!await exists(candidate)) continue;
-      const relative = path4.relative(canonical, await fs4.realpath(candidate));
-      if (relative === ".." || relative.startsWith(`..${path4.sep}`) || path4.isAbsolute(relative)) throw new Error("Configuration path escapes project root");
+      const relative = path5.relative(canonical, await fs5.realpath(candidate));
+      if (relative === ".." || relative.startsWith(`..${path5.sep}`) || path5.isAbsolute(relative)) throw new Error("Configuration path escapes project root");
     }
   }
   async saveChanged(file, before, after, existed) {
     if (before === after) return;
     if (existed) {
-      const backupDirectory = path4.join(this.dataDirectory, "project-action-backups");
-      await fs4.mkdir(backupDirectory, { recursive: true });
+      const backupDirectory = path5.join(this.dataDirectory, "project-action-backups");
+      await fs5.mkdir(backupDirectory, { recursive: true });
       const hash = createHash3("sha256").update(file).update(before).digest("hex");
-      await fs4.writeFile(path4.join(backupDirectory, `${hash}.toml`), before, { flag: "wx", mode: 384 }).catch((error) => {
+      await fs5.writeFile(path5.join(backupDirectory, `${hash}.toml`), before, { flag: "wx", mode: 384 }).catch((error) => {
         if (error.code !== "EEXIST") throw error;
       });
-      if (await fs4.readFile(file, "utf8") !== before) throw new Error("Configuration changed concurrently");
+      if (await fs5.readFile(file, "utf8") !== before) throw new Error("Configuration changed concurrently");
       await atomicWrite(file, after);
     } else {
-      await fs4.writeFile(file, after, { flag: "wx", mode: 384 });
+      await fs5.writeFile(file, after, { flag: "wx", mode: 384 });
     }
   }
   async removeManaged(entry) {
     if (!await exists(entry.root)) throw new Error("Project root unavailable; retry cleanup later");
     if (!await exists(entry.file)) return;
-    const expected = path4.join(entry.root, ".codex", "environments");
-    if (!samePath(path4.dirname(entry.file), expected)) throw new Error("Invalid managed path");
+    const expected = path5.join(entry.root, ".codex", "environments");
+    if (!samePath(path5.dirname(entry.file), expected)) throw new Error("Invalid managed path");
     await this.safeConfig(entry.root, entry.file);
-    const before = await fs4.readFile(entry.file, "utf8");
+    const before = await fs5.readFile(entry.file, "utf8");
     parse(before);
     const span = managedSpan(before);
     if (!span || !sameBlock(span.block, entry.block)) return;
     const after = before.slice(0, span.start) + before.slice(span.end);
     parse(after);
     if (entry.created && after === entry.base) {
-      if (await fs4.readFile(entry.file, "utf8") !== before) throw new Error("Configuration changed concurrently");
-      await fs4.unlink(entry.file);
+      if (await fs5.readFile(entry.file, "utf8") !== before) throw new Error("Configuration changed concurrently");
+      await fs5.unlink(entry.file);
     } else await this.saveChanged(entry.file, before, after, true);
   }
   async sync() {
     if (this.busy) return this.status;
     this.busy = true;
     let lock;
-    const lockFile = path4.join(this.dataDirectory, "project-actions.lock");
+    const lockFile = path5.join(this.dataDirectory, "project-actions.lock");
     try {
-      await fs4.mkdir(this.dataDirectory, { recursive: true });
+      await fs5.mkdir(this.dataDirectory, { recursive: true });
       try {
-        lock = await fs4.open(lockFile, "wx");
+        lock = await fs5.open(lockFile, "wx");
         await lock.writeFile(String(process.pid));
       } catch (error) {
         if (error.code !== "EEXIST") throw error;
-        const age = Date.now() - (await fs4.stat(lockFile)).mtimeMs;
+        const age = Date.now() - (await fs5.stat(lockFile)).mtimeMs;
         if (age > 3e4) {
-          const pid = Number(await fs4.readFile(lockFile, "utf8"));
+          const pid = Number(await fs5.readFile(lockFile, "utf8"));
           if (Number.isSafeInteger(pid) && pid > 0) {
             try {
               process.kill(pid, 0);
             } catch (e) {
-              if (e.code === "ESRCH") await fs4.unlink(lockFile);
+              if (e.code === "ESRCH") await fs5.unlink(lockFile);
             }
           }
         }
@@ -2144,8 +2176,8 @@ ${END}
       const snapshot = await discoverProjects(this.codexHome);
       this.status.source = snapshot.source;
       if (!snapshot.complete) throw new Error("Project registry unavailable; existing actions retained");
-      const ownerFile = path4.join(this.dataDirectory, "project-actions-owner.json");
-      const owner = await fs4.readFile(ownerFile, "utf8").then((value) => JSON.parse(value)).catch((error) => {
+      const ownerFile = path5.join(this.dataDirectory, "project-actions-owner.json");
+      const owner = await fs5.readFile(ownerFile, "utf8").then((value) => JSON.parse(value)).catch((error) => {
         if (error.code === "ENOENT") return null;
         throw error;
       });
@@ -2164,8 +2196,8 @@ ${END}
         }
       }
       if (!owner || owner.pid !== process.pid) await atomicWrite(ownerFile, JSON.stringify({ pid: process.pid, version: "0.5.0" }));
-      const ledgerPath = path4.join(this.dataDirectory, "project-actions.json");
-      const ledger = await fs4.readFile(ledgerPath, "utf8").then((text2) => JSON.parse(text2)).catch((error) => {
+      const ledgerPath = path5.join(this.dataDirectory, "project-actions.json");
+      const ledger = await fs5.readFile(ledgerPath, "utf8").then((text2) => JSON.parse(text2)).catch((error) => {
         if (error.code === "ENOENT") return { files: [] };
         throw error;
       });
@@ -2177,22 +2209,22 @@ ${END}
       for (const root of roots) {
         if (!await exists(root)) {
           files.push(...ledger.files.filter((entry) => samePath(entry.root, root)));
-          errors.push(`${path4.basename(root)}: \u9879\u76EE\u76EE\u5F55\u6682\u65F6\u4E0D\u53EF\u7528`);
+          errors.push(`${path5.basename(root)}: \u9879\u76EE\u76EE\u5F55\u6682\u65F6\u4E0D\u53EF\u7528`);
           continue;
         }
         try {
-          const folder = path4.join(root, ".codex", "environments");
-          const candidates = await fs4.readdir(folder).catch((error) => {
+          const folder = path5.join(root, ".codex", "environments");
+          const candidates = await fs5.readdir(folder).catch((error) => {
             if (error.code === "ENOENT") return [];
             throw error;
           });
           const names = candidates.filter((name) => name.endsWith(".toml"));
           if (!names.length) names.push("environment.toml");
           for (const name of names) {
-            const file = path4.join(folder, name);
+            const file = path5.join(folder, name);
             await this.safeConfig(root, file);
             const existed = await exists(file);
-            const before = existed ? await fs4.readFile(file, "utf8") : "";
+            const before = existed ? await fs5.readFile(file, "utf8") : "";
             const document = parse(before);
             const previous = ledger.files.find((entry) => samePath(entry.file, file));
             const span = managedSpan(before);
@@ -2204,7 +2236,7 @@ ${END}
               continue;
             }
             const base = span ? before.slice(0, span.start) + before.slice(span.end) : before || `version = 1
-name = ${JSON.stringify(path4.basename(root))}
+name = ${JSON.stringify(path5.basename(root))}
 
 [setup]
 script = ""
@@ -2215,14 +2247,14 @@ script = ""
             const after = `${prefix}${block}`;
             const updated = parse(after);
             if (!Array.isArray(updated.actions)) throw new Error("Action insertion failed");
-            await fs4.mkdir(folder, { recursive: true });
+            await fs5.mkdir(folder, { recursive: true });
             await this.safeConfig(root, file);
             await this.saveChanged(file, before, after, existed);
             files.push({ root, file, block, created: previous?.created ?? !existed, base: previous?.base ?? prefix });
             configured++;
           }
         } catch {
-          errors.push(`${path4.basename(root)}: \u65E0\u6CD5\u5B89\u5168\u66F4\u65B0\u9879\u76EE\u64CD\u4F5C\uFF0C\u5DF2\u4FDD\u7559\u73B0\u6709\u914D\u7F6E`);
+          errors.push(`${path5.basename(root)}: \u65E0\u6CD5\u5B89\u5168\u66F4\u65B0\u9879\u76EE\u64CD\u4F5C\uFF0C\u5DF2\u4FDD\u7559\u73B0\u6709\u914D\u7F6E`);
           files.push(...ledger.files.filter((entry) => samePath(entry.root, root) && !files.some((known) => samePath(known.file, entry.file))));
         }
       }
@@ -2231,7 +2263,7 @@ script = ""
         try {
           await this.removeManaged(entry);
         } catch {
-          errors.push(`${path4.basename(entry.root)}: \u6682\u65F6\u65E0\u6CD5\u6E05\u7406\u65E7\u5165\u53E3`);
+          errors.push(`${path5.basename(entry.root)}: \u6682\u65F6\u65E0\u6CD5\u6E05\u7406\u65E7\u5165\u53E3`);
           files.push(entry);
         }
       }
@@ -2243,7 +2275,7 @@ script = ""
     } finally {
       if (lock) {
         await lock.close();
-        await fs4.unlink(lockFile).catch(() => void 0);
+        await fs5.unlink(lockFile).catch(() => void 0);
       }
       this.busy = false;
     }
@@ -2254,11 +2286,11 @@ script = ""
 // src/desktop-entry.ts
 import { spawn } from "node:child_process";
 import { mkdir, readFile as readFile2, writeFile } from "node:fs/promises";
-import path5 from "node:path";
+import path6 from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 async function readDesktopEntry(directory) {
   try {
-    const value = JSON.parse(await readFile2(path5.join(directory, "desktop-entry.json"), "utf8"));
+    const value = JSON.parse(await readFile2(path6.join(directory, "desktop-entry.json"), "utf8"));
     if (value.application !== "context-window-monitor" || !Number.isSafeInteger(value.pid) || value.pid <= 0 || !/^[a-f0-9]{32}$/u.test(value.instanceId) || Date.now() - Date.parse(value.updatedAt) > 15e3 || !Number.isFinite(Date.parse(value.updatedAt))) return null;
     process.kill(value.pid, 0);
     return value;
@@ -2268,7 +2300,7 @@ async function readDesktopEntry(directory) {
 }
 async function stopDesktopEntry(directory) {
   const entry = await readDesktopEntry(directory);
-  if (entry) await writeFile(path5.join(directory, `desktop-stop-${entry.instanceId}`), "stop", { mode: 384 });
+  if (entry) await writeFile(path6.join(directory, `desktop-stop-${entry.instanceId}`), "stop", { mode: 384 });
 }
 async function ensureDesktopEntry(directory, pluginRoot, version) {
   if (process.platform !== "win32" || process.env.CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY === "1") return null;
@@ -2279,8 +2311,8 @@ async function ensureDesktopEntry(directory, pluginRoot, version) {
     for (let attempt = 0; attempt < 20 && await readDesktopEntry(directory); attempt++) await delay(100);
   }
   await mkdir(directory, { recursive: true });
-  const powershell = path5.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-  const script = path5.join(pluginRoot, "scripts", "desktop-entry.ps1");
+  const powershell = path6.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const script = path6.join(pluginRoot, "scripts", "desktop-entry.ps1");
   const literal = (value) => `'${value.replaceAll("'", "''")}'`;
   const quoteArgument = (value) => `"${value.replace(/(\\*)"/gu, '$1$1\\"').replace(/(\\+)$/u, "$1$1")}"`;
   const arguments_ = [
@@ -2322,32 +2354,32 @@ async function ensureDesktopEntry(directory, pluginRoot, version) {
 
 // src/startup-entry.ts
 import { execFile } from "node:child_process";
-import { homedir as homedir4 } from "node:os";
-import path6 from "node:path";
+import { homedir as homedir5 } from "node:os";
+import path7 from "node:path";
 import { promisify } from "node:util";
 async function ensureStartupEntry(pluginRoot) {
   if (process.platform !== "win32" || process.env.CONTEXT_MONITOR_DISABLE_DESKTOP_ENTRY === "1" || process.env.CONTEXT_MONITOR_DISABLE_LOGIN_STARTUP === "1") return null;
-  const powershell = path6.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const powershell = path7.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
   const { stdout } = await promisify(execFile)(powershell, [
     "-NoProfile",
     "-NonInteractive",
     "-ExecutionPolicy",
     "Bypass",
     "-File",
-    path6.join(pluginRoot, "scripts", "configure-startup.ps1"),
+    path7.join(pluginRoot, "scripts", "configure-startup.ps1"),
     "-NodePath",
     process.execPath,
     "-CodexHome",
-    process.env.CODEX_HOME || path6.join(homedir4(), ".codex")
+    process.env.CODEX_HOME || path7.join(homedir5(), ".codex")
   ], { windowsHide: true, timeout: 15e3 });
   return JSON.parse(stdout);
 }
 
 // src/open-dashboard.ts
 var VERSION = "0.5.0";
-var dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path7.join(process.env.CODEX_HOME || path7.join(homedir5(), ".codex"), "context-window-monitor");
-var statePath = path7.join(dataDirectory, `launcher-${VERSION}.json`);
-var lockPath = path7.join(dataDirectory, `launcher-${VERSION}.lock`);
+var dataDirectory = process.env.CONTEXT_MONITOR_LAUNCHER_DATA || path8.join(process.env.CODEX_HOME || path8.join(homedir6(), ".codex"), "context-window-monitor");
+var statePath = path8.join(dataDirectory, `launcher-${VERSION}.json`);
+var lockPath = path8.join(dataDirectory, `launcher-${VERSION}.lock`);
 function localUrl(value) {
   if (typeof value !== "string") return false;
   try {
@@ -2391,7 +2423,7 @@ async function ensureServer() {
       if (recheck) return recheck;
       const launcher = fileURLToPath(import.meta.url);
       const quote = (value) => `'${value.replaceAll("'", "''")}'`;
-      const command = process.platform === "win32" ? path7.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.execPath;
+      const command = process.platform === "win32" ? path8.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.execPath;
       const windowsCommand = `Start-Process -FilePath ${quote(process.execPath)} -ArgumentList ${quote(`"${launcher}" --serve`)} -WindowStyle Hidden -ErrorAction Stop`;
       const arguments_ = process.platform === "win32" ? ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(windowsCommand, "utf16le").toString("base64")] : [launcher, "--serve"];
       const child = spawn2(command, arguments_, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore", env: process.env });
@@ -2417,7 +2449,7 @@ async function ensureServer() {
 }
 async function serve() {
   const provider = new RolloutContextProvider();
-  const actions = new ProjectActions({ pluginRoot: path7.resolve(path7.dirname(fileURLToPath(import.meta.url)), ".."), dataDirectory });
+  const actions = new ProjectActions({ pluginRoot: path8.resolve(path8.dirname(fileURLToPath(import.meta.url)), ".."), dataDirectory });
   if (process.env.CONTEXT_MONITOR_DISABLE_AUTO_PROJECTS !== "1") actions.start();
   else actions.status.enabled = false;
   const server = await startDashboard(new ContextMonitorService(provider), provider, () => actions.status);
@@ -2435,9 +2467,9 @@ async function serve() {
   });
 }
 async function openLaunchUrl(url) {
-  const command = process.platform === "win32" ? path7.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.platform === "darwin" ? "open" : "xdg-open";
+  const command = process.platform === "win32" ? path8.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe") : process.platform === "darwin" ? "open" : "xdg-open";
   const openCommand = `Start-Process -FilePath '${url.replaceAll("'", "''")}' -ErrorAction Stop`;
-  const args = process.platform === "win32" ? url.startsWith("codex://browser?") ? ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path7.resolve(path7.dirname(fileURLToPath(import.meta.url)), "../scripts/open-codex-browser.ps1"), "-LaunchUrl", url] : ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(openCommand, "utf16le").toString("base64")] : [url];
+  const args = process.platform === "win32" ? url.startsWith("codex://browser?") ? ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path8.resolve(path8.dirname(fileURLToPath(import.meta.url)), "../scripts/open-codex-browser.ps1"), "-LaunchUrl", url] : ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(openCommand, "utf16le").toString("base64")] : [url];
   const child = spawn2(command, args, { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore" });
   await new Promise((resolve, reject) => {
     child.once("error", reject);
@@ -2454,14 +2486,14 @@ async function main() {
     const server2 = await ensureServer();
     let desktopEntry;
     try {
-      desktopEntry = await ensureDesktopEntry(dataDirectory, path7.resolve(path7.dirname(fileURLToPath(import.meta.url)), ".."), VERSION);
+      desktopEntry = await ensureDesktopEntry(dataDirectory, path8.resolve(path8.dirname(fileURLToPath(import.meta.url)), ".."), VERSION);
     } catch (error) {
       process.stderr.write(`${error instanceof Error ? error.message : error}
 `);
     }
     let loginStartup;
     try {
-      loginStartup = await ensureStartupEntry(path7.resolve(path7.dirname(fileURLToPath(import.meta.url)), ".."));
+      loginStartup = await ensureStartupEntry(path8.resolve(path8.dirname(fileURLToPath(import.meta.url)), ".."));
     } catch (error) {
       process.stderr.write(`${error instanceof Error ? error.message : error}
 `);

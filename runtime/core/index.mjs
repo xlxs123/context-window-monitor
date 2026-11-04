@@ -1746,9 +1746,9 @@ var AppServerContextProvider = class {
 };
 
 // src/providers/rollout-context-provider.ts
-import { promises as fs4 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import path4 from "node:path";
+import { promises as fs5 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import path5 from "node:path";
 
 // src/providers/session-registry.ts
 import { createHash as createHash3 } from "node:crypto";
@@ -1877,6 +1877,36 @@ var SessionRegistry = class {
   }
 };
 
+// src/providers/session-titles.ts
+import { promises as fs4 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import path4 from "node:path";
+async function sessionTitles(ids) {
+  const titles = /* @__PURE__ */ new Map();
+  if (!ids.length) return titles;
+  const configured = process.env.CODEX_HOME?.trim();
+  const home = configured && !configured.includes("${") ? configured : path4.join(homedir3(), ".codex");
+  try {
+    const files = (await fs4.readdir(home)).filter((file) => /^state_\d+\.sqlite$/u.test(file)).sort((a, b) => Number(b.match(/\d+/u)[0]) - Number(a.match(/\d+/u)[0]));
+    if (!files[0]) return titles;
+    const { DatabaseSync } = await import("node:sqlite");
+    const database = new DatabaseSync(path4.join(home, files[0]), { readOnly: true });
+    try {
+      const columns = database.prepare("PRAGMA table_info(threads)").all();
+      const display = columns.some((column) => column.name === "name") ? "COALESCE(NULLIF(TRIM(name), ''), title)" : "title";
+      const query = database.prepare(`SELECT ${display} AS title FROM threads WHERE id = ?`);
+      for (const id of ids) {
+        const row = query.get(id);
+        if (typeof row?.title === "string" && row.title.trim()) titles.set(id, row.title.trim());
+      }
+    } finally {
+      database.close();
+    }
+  } catch {
+  }
+  return titles;
+}
+
 // src/providers/rollout-context-provider.ts
 var INITIAL_TAIL_BYTES = 2 * 1024 * 1024;
 var MAX_SNAPSHOTS = 80;
@@ -1890,23 +1920,23 @@ function selectSnapshotsForModel(snapshots, activeModel) {
 function usableEnvironmentPath2(value) {
   const trimmed = value?.trim();
   if (!trimmed || trimmed.includes("${")) return null;
-  return path4.resolve(trimmed);
+  return path5.resolve(trimmed);
 }
 function codexSessionsRoot() {
-  const codexDirectory = usableEnvironmentPath2(process.env.CODEX_HOME) ?? path4.join(homedir3(), ".codex");
-  return path4.join(codexDirectory, "sessions");
+  const codexDirectory = usableEnvironmentPath2(process.env.CODEX_HOME) ?? path5.join(homedir4(), ".codex");
+  return path5.join(codexDirectory, "sessions");
 }
 function sessionIdFromFilename(filePath2) {
-  const match = path4.basename(filePath2).match(
+  const match = path5.basename(filePath2).match(
     /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/iu
   );
-  return match?.[1] ?? path4.basename(filePath2, ".jsonl");
+  return match?.[1] ?? path5.basename(filePath2, ".jsonl");
 }
 async function existingFile(filePath2) {
   if (!filePath2) return null;
   try {
-    const stats = await fs4.stat(filePath2);
-    return stats.isFile() ? path4.resolve(filePath2) : null;
+    const stats = await fs5.stat(filePath2);
+    return stats.isFile() ? path5.resolve(filePath2) : null;
   } catch {
     return null;
   }
@@ -1916,21 +1946,21 @@ async function recentRolloutFiles() {
   const files = [];
   let years;
   try {
-    years = (await fs4.readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 2);
+    years = (await fs5.readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 2);
   } catch {
     return [];
   }
   for (const year of years) {
-    const yearPath = path4.join(root, year);
-    const months = (await fs4.readdir(yearPath, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 3);
+    const yearPath = path5.join(root, year);
+    const months = (await fs5.readdir(yearPath, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 3);
     for (const month of months) {
-      const monthPath = path4.join(yearPath, month);
-      const days = (await fs4.readdir(monthPath, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 14);
+      const monthPath = path5.join(yearPath, month);
+      const days = (await fs5.readdir(monthPath, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse().slice(0, 14);
       for (const day of days) {
-        const dayPath = path4.join(monthPath, day);
-        const dayFiles = await fs4.readdir(dayPath, { withFileTypes: true });
+        const dayPath = path5.join(monthPath, day);
+        const dayFiles = await fs5.readdir(dayPath, { withFileTypes: true });
         files.push(
-          ...dayFiles.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl")).map((entry) => path4.join(dayPath, entry.name))
+          ...dayFiles.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl")).map((entry) => path5.join(dayPath, entry.name))
         );
       }
     }
@@ -1943,7 +1973,7 @@ async function locateRollout(sessionId) {
     return files.find((filePath2) => sessionIdFromFilename(filePath2) === sessionId) ?? null;
   }
   const withStats = await Promise.all(
-    files.map(async (filePath2) => ({ filePath: filePath2, stats: await fs4.stat(filePath2) }))
+    files.map(async (filePath2) => ({ filePath: filePath2, stats: await fs5.stat(filePath2) }))
   );
   return withStats.sort((left, right) => right.stats.mtimeMs - left.stats.mtimeMs)[0]?.filePath ?? null;
 }
@@ -1956,16 +1986,16 @@ var RolloutContextProvider = class {
   reading = /* @__PURE__ */ new Map();
   /** Project actions do not expose the selected chat ID. Pick a recent project log explicitly. */
   async latestSessionForDirectory(directory) {
-    const root = path4.resolve(directory);
+    const root = path5.resolve(directory);
     const files = await recentRolloutFiles();
-    const recent = (await Promise.all(files.map(async (file) => ({ file, modified: await fs4.stat(file).then((s) => s.mtimeMs).catch(() => 0) })))).sort((a, b) => b.modified - a.modified).slice(0, 200);
+    const recent = (await Promise.all(files.map(async (file) => ({ file, modified: await fs5.stat(file).then((s) => s.mtimeMs).catch(() => 0) })))).sort((a, b) => b.modified - a.modified).slice(0, 200);
     for (const { file } of recent) {
       try {
         const header = await this.readHeader(file);
         const record = header ? JSON.parse(header) : null;
         if (record?.type !== "session_meta" || typeof record.payload?.cwd !== "string") continue;
-        const relative = path4.relative(root, path4.resolve(record.payload.cwd));
-        if (relative === "" || !relative.startsWith(`..${path4.sep}`) && relative !== ".." && !path4.isAbsolute(relative)) return sessionIdFromFilename(file);
+        const relative = path5.relative(root, path5.resolve(record.payload.cwd));
+        if (relative === "" || !relative.startsWith(`..${path5.sep}`) && relative !== ".." && !path5.isAbsolute(relative)) return sessionIdFromFilename(file);
       } catch {
       }
     }
@@ -1974,7 +2004,7 @@ var RolloutContextProvider = class {
   async listSessions(limit = 20) {
     const registered = await this.registry.list(limit);
     const files = await recentRolloutFiles();
-    const recent = (await Promise.all(files.map(async (file) => ({ file, stats: await fs4.stat(file) })))).sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs).slice(0, limit);
+    const recent = (await Promise.all(files.map(async (file) => ({ file, stats: await fs5.stat(file) })))).sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs).slice(0, limit);
     const result = new Map(registered.map((s) => [s.sessionId, { sessionId: s.sessionId, model: s.model, lastSeenAt: s.lastSeenAt, active: s.endedAt === null, parentSessionId: null, agentName: null }]));
     for (const { file, stats } of recent) {
       const id = sessionIdFromFilename(file);
@@ -1984,7 +2014,9 @@ var RolloutContextProvider = class {
       const previous = result.get(id);
       result.set(id, { sessionId: id, model: previous?.model ?? null, lastSeenAt: stats.mtime.toISOString(), active: previous?.active ?? false, parentSessionId: state.parentSessionId, agentName: state.agentName });
     }
-    return [...result.values()].sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt)).slice(0, limit);
+    const sessions = [...result.values()].sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt)).slice(0, limit);
+    const titles = await sessionTitles(sessions.map((session) => session.sessionId));
+    return sessions.map((session) => ({ ...session, title: titles.get(session.sessionId) ?? null }));
   }
   async readItem(sessionId, itemId) {
     await this.getContext({ sessionId });
@@ -1992,7 +2024,7 @@ var RolloutContextProvider = class {
     if (!entry) throw new Error("\u8BE5\u8BB0\u5F55\u4E0D\u5728\u4FDD\u7559\u8303\u56F4\u5185\uFF1B\u8BF7\u5237\u65B0\u540E\u91CD\u8BD5\u3002");
     const [file, cache] = entry;
     const location = cache.state.locations.get(itemId);
-    const handle = await fs4.open(file, "r");
+    const handle = await fs5.open(file, "r");
     let raw;
     try {
       raw = Buffer.alloc(location.length);
@@ -2008,7 +2040,7 @@ var RolloutContextProvider = class {
     return { id: itemId, text: body.slice(0, 32768), truncated: body.length > 32768, scope: "Codex \u65E5\u5FD7\u516C\u5F00\u8BB0\u5F55\uFF1B\u4E0D\u662F\u5B8C\u6574\u6A21\u578B\u8BF7\u6C42\uFF1B\u4E0D\u89E3\u5BC6 reasoning" };
   }
   async readHeader(file) {
-    const h = await fs4.open(file, "r");
+    const h = await fs5.open(file, "r");
     try {
       const buffer = Buffer.alloc(256 * 1024);
       const { bytesRead } = await h.read(buffer, 0, buffer.length, 0);
@@ -2097,7 +2129,7 @@ var RolloutContextProvider = class {
       if (registered) return { registration: registered, selection: "explicit" };
       const filePath2 = [...this.caches.entries()].find(([, cache]) => cache.state.sessionId === sessionId)?.[0] ?? await locateRollout(sessionId);
       if (!filePath2) return null;
-      const stats2 = await fs4.stat(filePath2);
+      const stats2 = await fs5.stat(filePath2);
       return {
         selection: "explicit",
         registration: {
@@ -2115,7 +2147,7 @@ var RolloutContextProvider = class {
     if (active) return { registration: active, selection: "active-hook" };
     const latestPath = await locateRollout();
     if (!latestPath) return null;
-    const stats = await fs4.stat(latestPath);
+    const stats = await fs5.stat(latestPath);
     return {
       selection: "latest-rollout",
       registration: {
@@ -2140,7 +2172,7 @@ var RolloutContextProvider = class {
     }
   }
   async readTail(filePath2, selection, registration) {
-    const stats = await fs4.stat(filePath2);
+    const stats = await fs5.stat(filePath2);
     let cache = this.caches.get(filePath2);
     if (!cache || stats.size < cache.offset || stats.size - cache.offset > INITIAL_TAIL_BYTES) {
       const offset = Math.max(stats.size - INITIAL_TAIL_BYTES, 0);
@@ -2163,7 +2195,7 @@ var RolloutContextProvider = class {
     }
     if (stats.size === cache.offset) return cache.state;
     const length = stats.size - cache.offset;
-    const handle = await fs4.open(filePath2, "r");
+    const handle = await fs5.open(filePath2, "r");
     let bytes;
     let startOffset = cache.offset - cache.carry.length;
     try {
